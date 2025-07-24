@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,12 +17,33 @@ import { Separator } from "@/components/ui/separator";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import axios from "axios";
+import { useUser } from "@/contexts/UserContext";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+  const { user, setUser } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const userId = localStorage.getItem("userId") || "mockUserId";
+      try {
+        const res = await axios.get(
+          `http://localhost:5000/api/users/${userId}`
+        );
+        setProfile(res.data.user);
+      } catch (err: any) {
+        alert(err.response?.data?.message || "Failed to fetch profile");
+      }
+    };
+    fetchProfile();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,8 +55,49 @@ export default function LoginPage() {
     }, 2000);
   };
 
+  const handleLogout = () => {
+    setUser(null);
+    router.push("/");
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      {/* Header */}
+      <header className="border-b border-slate-800 bg-slate-950 sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo and Title can go here if needed */}
+            <div className="flex items-center space-x-3">
+              {user ? (
+                <>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() =>
+                      router.push(
+                        user.userType === "admin"
+                          ? "/admin-dashboard"
+                          : "/player-dashboard"
+                      )
+                    }
+                  >
+                    {user.firstName}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleLogout}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>{/* Add any guest user buttons or links here if needed */}</>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
       <div className="w-full max-w-md">
         {/* Back to Home */}
         <Link

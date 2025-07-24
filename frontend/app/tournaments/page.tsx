@@ -34,6 +34,40 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useUser } from "@/contexts/UserContext";
+import { useRouter } from "next/navigation";
+
+interface Tournament {
+  id: number;
+  name: string;
+  sport: string;
+  date: string;
+  startDate: string;
+  location: string;
+  prize: string;
+  prizeAmount: number;
+  teams: number;
+  maxTeams: number;
+  registrationFee: string;
+  status: string;
+  image: string;
+  organizer: string;
+  description: string;
+  format: string;
+  difficulty: string;
+  registrationDeadline: string;
+}
+
+interface PastTournament {
+  id: number;
+  name: string;
+  sport: string;
+  date: string;
+  winner: string;
+  prize: string;
+  teams: number;
+  image: string;
+}
 
 export default function TournamentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,7 +75,15 @@ export default function TournamentsPage() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedPrizeRange, setPrizeRange] = useState("all");
 
-  const tournaments = [
+  const { user, setUser } = useUser();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    setUser(null);
+    router.push("/");
+  };
+
+  const tournaments: Tournament[] = [
     {
       id: 1,
       name: "Mumbai Football Championship",
@@ -170,7 +212,7 @@ export default function TournamentsPage() {
     },
   ];
 
-  const pastTournaments = [
+  const pastTournaments: PastTournament[] = [
     {
       id: 101,
       name: "Mumbai Cricket Premier League",
@@ -276,16 +318,42 @@ export default function TournamentsPage() {
               </Link>
             </nav>
             <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                asChild
-                className="text-gray-300 hover:text-white"
-              >
-                <Link href="/login">Login</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/signup">Sign Up</Link>
-              </Button>
+              {user ? (
+                <>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() =>
+                      router.push(
+                        user.userType === "admin"
+                          ? "/admin-dashboard"
+                          : "/player-dashboard"
+                      )
+                    }
+                  >
+                    {user.firstName}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleLogout}
+                    className="text-gray-300 hover:text-white"
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    asChild
+                    className="text-gray-300 hover:text-white"
+                  >
+                    <Link href="/login">Login</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/signup">Sign Up</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

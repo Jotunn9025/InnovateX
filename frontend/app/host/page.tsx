@@ -27,6 +27,8 @@ import {
   Shield,
 } from "lucide-react";
 import Link from "next/link";
+import { useUser } from "@/contexts/UserContext";
+import { useRouter } from "next/navigation";
 
 export default function HostPage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -57,6 +59,14 @@ export default function HostPage() {
     rules: "",
     cancellationPolicy: "",
   });
+
+  const { user, setUser } = useUser();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    setUser(null);
+    router.push("/");
+  };
 
   const availableSports = [
     "Football",
@@ -130,16 +140,42 @@ export default function HostPage() {
               <span className="text-xl font-bold text-white">TurfBook</span>
             </Link>
             <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                asChild
-                className="text-gray-300 hover:text-white"
-              >
-                <Link href="/login">Login</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/signup">Sign Up</Link>
-              </Button>
+              {user ? (
+                <>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() =>
+                      router.push(
+                        user.userType === "admin"
+                          ? "/admin-dashboard"
+                          : "/player-dashboard"
+                      )
+                    }
+                  >
+                    {user.firstName}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleLogout}
+                    className="text-gray-300 hover:text-white"
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    asChild
+                    className="text-gray-300 hover:text-white"
+                  >
+                    <Link href="/login">Login</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/signup">Sign Up</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

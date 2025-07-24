@@ -17,21 +17,41 @@ import { Separator } from "@/components/ui/separator";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import axios from "axios";
+import { useRouter } from "next/navigation";
+import { useUser } from "@/contexts/UserContext";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { setUser } = useUser();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate login
-    setTimeout(() => {
+    try {
+      const res = await axios.post("/api/auth/login", { email, password });
+      setUser({
+        id: res.data.user.id,
+        email: res.data.user.email,
+        firstName: res.data.user.firstName,
+        lastName: res.data.user.lastName,
+        userType: res.data.user.userType,
+      });
+      // Redirect to dashboard based on userType
+      if (res.data.user.userType === "admin") {
+        router.push("/");
+      } else {
+        router.push("/");
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Login failed");
+    } finally {
       setIsLoading(false);
-      // Redirect to dashboard or home
-    }, 2000);
+    }
   };
 
   return (

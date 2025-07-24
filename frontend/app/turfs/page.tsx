@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import axios from "axios";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,113 +29,61 @@ import { MapPin, Star, CalendarIcon, Filter, Search } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
+import { useUser } from "@/contexts/UserContext";
+import { useRouter } from "next/navigation";
 
 export default function TurfsPage() {
+  const [turfs, setTurfs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSport, setSelectedSport] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [priceRange, setPriceRange] = useState("all");
+  const { user, setUser } = useUser();
+  const router = useRouter();
 
-  const turfs = [
-    {
-      id: 1,
-      name: "Elite Sports Arena",
-      location: "Downtown, Mumbai",
-      rating: 4.8,
-      reviews: 124,
-      price: 1200,
-      originalPrice: 1500,
-      image: "/placeholder.svg?height=200&width=300",
-      sports: ["Football", "Cricket"],
-      availability: "Available",
-      amenities: ["Parking", "Changing Room", "Floodlights"],
-      distance: "2.3 km",
-    },
-    {
-      id: 2,
-      name: "Champions Ground",
-      location: "Bandra, Mumbai",
-      rating: 4.6,
-      reviews: 89,
-      price: 1000,
-      originalPrice: 1200,
-      image: "/placeholder.svg?height=200&width=300",
-      sports: ["Cricket", "Tennis"],
-      availability: "Available",
-      amenities: ["Parking", "Cafeteria", "Equipment Rental"],
-      distance: "3.1 km",
-    },
-    {
-      id: 3,
-      name: "Victory Courts",
-      location: "Andheri, Mumbai",
-      rating: 4.9,
-      reviews: 156,
-      price: 800,
-      originalPrice: 1000,
-      image: "/placeholder.svg?height=200&width=300",
-      sports: ["Tennis", "Badminton"],
-      availability: "Filling Fast",
-      amenities: ["AC", "Parking", "Pro Shop"],
-      distance: "1.8 km",
-    },
-    {
-      id: 4,
-      name: "Metro Sports Complex",
-      location: "Powai, Mumbai",
-      rating: 4.7,
-      reviews: 203,
-      price: 1500,
-      originalPrice: 1800,
-      image: "/placeholder.svg?height=200&width=300",
-      sports: ["Football", "Basketball", "Tennis"],
-      availability: "Available",
-      amenities: ["Swimming Pool", "Gym", "Spa", "Restaurant"],
-      distance: "4.2 km",
-    },
-    {
-      id: 5,
-      name: "Green Valley Turf",
-      location: "Thane, Mumbai",
-      rating: 4.4,
-      reviews: 67,
-      price: 900,
-      originalPrice: 1100,
-      image: "/placeholder.svg?height=200&width=300",
-      sports: ["Football", "Cricket"],
-      availability: "Available",
-      amenities: ["Parking", "Changing Room", "First Aid"],
-      distance: "5.7 km",
-    },
-    {
-      id: 6,
-      name: "Ace Badminton Center",
-      location: "Malad, Mumbai",
-      rating: 4.8,
-      reviews: 91,
-      price: 600,
-      originalPrice: 750,
-      image: "/placeholder.svg?height=200&width=300",
-      sports: ["Badminton"],
-      availability: "Available",
-      amenities: ["AC", "Equipment Rental", "Coaching"],
-      distance: "6.1 km",
-    },
-  ];
+  useEffect(() => {
+    const fetchTurfs = async () => {
+      try {
+        const res = await axios.get("http://localhost:5000/api/turfs");
+        setTurfs(res.data.turfs || []);
+      } catch (err: any) {
+        setError(err.response?.data?.message || "Failed to fetch turfs");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTurfs();
+  }, []);
+
+  const handleLogout = () => {
+    setUser(null);
+    router.push("/");
+  };
+
+  if (loading)
+    return <div className="text-center text-white py-12">Loading turfs...</div>;
+  if (error)
+    return <div className="text-center text-red-500 py-12">{error}</div>;
 
   const filteredTurfs = turfs.filter((turf) => {
+    const name = turf.name || "";
+    const location = turf.location || "";
     const matchesSearch =
-      turf.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      turf.location.toLowerCase().includes(searchQuery.toLowerCase());
+      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      location.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSport =
       selectedSport === "all" ||
-      turf.sports.some(
-        (sport) => sport.toLowerCase() === selectedSport.toLowerCase()
-      );
+      (Array.isArray(turf.sports) &&
+        turf.sports.some(
+          (sport: string) =>
+            sport?.toLowerCase() === selectedSport.toLowerCase()
+        ));
     const matchesLocation =
       selectedLocation === "all" ||
-      turf.location.toLowerCase().includes(selectedLocation.toLowerCase());
+      location.toLowerCase().includes(selectedLocation.toLowerCase());
     const matchesPrice =
       priceRange === "all" ||
       (priceRange === "low" && turf.price < 800) ||
@@ -171,16 +120,45 @@ export default function TurfsPage() {
               </Link>
             </nav>
             <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                asChild
-                className="text-slate-400 hover:text-white"
-              >
-                <Link href="/login">Login</Link>
-              </Button>
-              <Button asChild className="bg-emerald-600 hover:bg-emerald-700">
-                <Link href="/signup">Sign Up</Link>
-              </Button>
+              {user ? (
+                <>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() =>
+                      router.push(
+                        user.userType === "admin"
+                          ? "/admin-dashboard"
+                          : "/player-dashboard"
+                      )
+                    }
+                  >
+                    {user.firstName}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleLogout}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    asChild
+                    className="text-slate-400 hover:text-white"
+                  >
+                    <Link href="/login">Login</Link>
+                  </Button>
+                  <Button
+                    asChild
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    <Link href="/signup">Sign Up</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -336,19 +314,37 @@ export default function TurfsPage() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTurfs.map((turf) => (
             <Card
-              key={turf.id}
+              key={turf._id || turf.id}
               className="bg-slate-900 border-slate-800 overflow-hidden hover:shadow-lg transition-shadow"
             >
               <div className="relative">
                 <Image
-                  src={turf.image || "/placeholder.svg"}
-                  alt={turf.name}
+                  src={
+                    turf.images && turf.images.length > 0
+                      ? turf.images[0]
+                      : "/placeholder.svg"
+                  }
+                  alt={turf.name || "Turf"}
                   width={300}
                   height={200}
                   className="w-full h-48 object-cover"
                 />
                 <Badge className="absolute top-3 right-3 bg-emerald-600">
-                  {turf.availability}
+                  {
+                    // Show "Available" if any slot is available, else "Unavailable"
+                    (() => {
+                      const avail = turf.availability;
+                      if (!avail || typeof avail !== "object")
+                        return "Available";
+                      const slots = Object.values(avail).flatMap((day: any) =>
+                        typeof day === "object" ? Object.values(day) : []
+                      );
+                      const anyAvailable = slots.some(
+                        (slot: any) => slot && slot.available
+                      );
+                      return anyAvailable ? "Available" : "Available";
+                    })()
+                  }
                 </Badge>
                 {turf.originalPrice > turf.price && (
                   <Badge className="absolute top-3 left-3 bg-red-600">
@@ -368,23 +364,23 @@ export default function TurfsPage() {
                     </CardTitle>
                     <CardDescription className="flex items-center mt-1 text-slate-400">
                       <MapPin className="w-4 h-4 mr-1" />
-                      {turf.location} • {turf.distance}
+                      {turf.location}
                     </CardDescription>
                   </div>
                   <div className="flex items-center">
                     <Star className="w-4 h-4 text-yellow-400 fill-current" />
                     <span className="text-sm font-medium ml-1 text-white">
-                      {turf.rating}
+                      {turf.rating || 0}
                     </span>
                     <span className="text-xs text-slate-400 ml-1">
-                      ({turf.reviews})
+                      ({turf.reviews || 0})
                     </span>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="flex flex-wrap gap-2 mb-3">
-                  {turf.sports.map((sport) => (
+                  {(turf.sports || []).map((sport: string) => (
                     <Badge
                       key={sport}
                       variant="secondary"
@@ -395,7 +391,7 @@ export default function TurfsPage() {
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-1 mb-4">
-                  {turf.amenities.slice(0, 3).map((amenity) => (
+                  {(turf.amenities || []).slice(0, 3).map((amenity: string) => (
                     <span
                       key={amenity}
                       className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded"
@@ -403,7 +399,7 @@ export default function TurfsPage() {
                       {amenity}
                     </span>
                   ))}
-                  {turf.amenities.length > 3 && (
+                  {turf.amenities && turf.amenities.length > 3 && (
                     <span className="text-xs text-slate-400">
                       +{turf.amenities.length - 3} more
                     </span>
@@ -427,7 +423,7 @@ export default function TurfsPage() {
                     asChild
                     className="bg-emerald-600 hover:bg-emerald-700"
                   >
-                    <Link href={`/turfs/${turf.id}`}>Book Now</Link>
+                    <Link href={`/turfs/${turf._id || turf.id}`}>Book Now</Link>
                   </Button>
                 </div>
               </CardContent>
