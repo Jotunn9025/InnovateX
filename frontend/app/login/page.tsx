@@ -43,7 +43,7 @@ export default function LoginPage() {
       });
       // Redirect to dashboard based on userType
       if (res.data.user.userType === "admin") {
-        router.push("/");
+        router.push("/admin");
       } else {
         router.push("/");
       }

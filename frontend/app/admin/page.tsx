@@ -58,169 +58,226 @@ interface Turf {
   location: string;
   fullAddress: string;
   price: number;
-  status?: string;
-  bookings?: number;
-  revenue?: number;
-  rating?: number;
   [key: string]: any;
 }
 
 export default function AdminDashboard() {
-  // your states and logic unchanged as per your original code
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    new Date()
+  );
+  const [liveBookings, setLiveBookings] = useState<Booking[]>([]);
+  const socketRef = useRef<Socket | null>(null);
+  const { user } = useUser();
+  // For adding a new turf
+  const [newTurf, setNewTurf] = useState({ name: "", location: "", fullAddress: "", price: "" });
+  const [myTurfs, setMyTurfs] = useState<Turf[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const socket = io("http://localhost:5000");
+    socketRef.current = socket;
+    socket.emit("register", { userId: user.id, userType: user.userType, email: user.email });
+    socket.on("new-booking", ({ booking }: { booking: Booking }) => {
+      setLiveBookings((prev) => [booking, ...prev]);
+    });
+    // Fetch my turfs
+    axios.get(`http://localhost:5000/api/turfs?owner=${user.id}`).then(res => setMyTurfs(res.data.turfs.filter((t: Turf) => t.owner === user.id)));
+    // Fetch all bookings for my turfs
+    axios.get(`http://localhost:5000/api/bookings/admin?ownerId=${user.id}`).then(res => setLiveBookings(res.data.bookings));
+    return () => { socket.disconnect(); };
+  }, [user]);
+
+  const handleApprove = (bookingId: string) => {
+    if (socketRef.current) {
+      socketRef.current.emit("approve-booking", { bookingId });
+      setLiveBookings((prev) => prev.map(b => b._id === bookingId ? { ...b, status: 'approved' } : b));
+    }
+  };
+  const handleReject = (bookingId: string) => {
+    if (socketRef.current) {
+      socketRef.current.emit("reject-booking", { bookingId });
+      setLiveBookings((prev) => prev.map(b => b._id === bookingId ? { ...b, status: 'rejected' } : b));
+    }
+  };
+
+  const handleAddTurf = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    const res = await axios.post("http://localhost:5000/api/turfs", { ...newTurf, price: Number(newTurf.price), owner: user.id });
+    setMyTurfs((prev) => [...prev, res.data.turf]);
+    setNewTurf({ name: "", location: "", fullAddress: "", price: "" });
+  };
+
+  // Calculate dynamic stats
+  const totalBookings = liveBookings.length;
+  const totalRevenue = liveBookings.reduce((sum, b) => {
+    const turf = myTurfs.find(t => t._id === t._id);
+    return sum + (turf ? turf.price : 0);
+  }, 0);
+  const activeTurfs = myTurfs.length;
+  // Example utilization: bookings per turf per day (simple version)
+  const utilization = activeTurfs > 0 ? Math.round((totalBookings / activeTurfs) * 10) : 0;
+
+  // Analytics: group bookings by month and sport
+  const revenueByMonth: { [month: string]: number } = {};
+  const bookingsByMonth: { [month: string]: number } = {};
+  const sportsCount: { [sport: string]: number } = {};
+  liveBookings.forEach(b => {
+    const month = new Date(b.date).toLocaleString('default', { month: 'short' });
+    revenueByMonth[month] = (revenueByMonth[month] || 0) + (myTurfs.find(t => t._id === b.turf)?.price || 0);
+    bookingsByMonth[month] = (bookingsByMonth[month] || 0) + 1;
+    sportsCount[b.sport] = (sportsCount[b.sport] || 0) + 1;
+  });
+  const revenueData = Object.keys(revenueByMonth).map(month => ({ month, revenue: revenueByMonth[month], bookings: bookingsByMonth[month] }));
+  const sportsData = Object.keys(sportsCount).map(sport => ({ name: sport, value: sportsCount[sport], color: '#10B981' }));
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "Confirmed":
+        return "bg-green-100 text-green-800";
+      case "Pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "Cancelled":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getTurfStatusColor = (status: string) => {
+    switch (status) {
+      case "Active":
+        return "bg-green-100 text-green-800";
+      case "Maintenance":
+        return "bg-yellow-100 text-yellow-800";
+      case "Inactive":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-green-300">
+    <div className="min-h-screen bg-gray-900">
       {/* Header */}
-      <header className="bg-green-900 border-b border-green-800 shadow-sm">
-        <div className="container mx-auto px-6 py-5 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-green-400">
-              Admin Dashboard
-            </h1>
-            <p className="text-green-300">Manage your turfs and bookings</p>
-          </div>
-          <div>
-            <Button className="flex items-center bg-green-600 hover:bg-green-700">
-              <Plus className="w-5 h-5 mr-2" />
-              Add New Turf
-            </Button>
+      <header className="bg-gray-800 border-b border-gray-700">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+              <p className="text-gray-300">Manage your turfs and bookings</p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Add New Turf
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-6 py-10">
+      <div className="container mx-auto px-4 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          <Card className="bg-gray-800 border border-green-700 shadow">
-            <CardHeader className="flex justify-between items-center pb-2">
-              <CardTitle className="text-green-400 text-sm font-semibold">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
                 Total Revenue
               </CardTitle>
-              <DollarSign className="h-5 w-5 text-green-500" />
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-extrabold text-green-400">
-                ₹{totalRevenue}
-              </div>
+              <div className="text-2xl font-bold">₹{totalRevenue}</div>
+              <p className="text-xs text-muted-foreground">
+                {/* You can add a dynamic comparison here if needed */}
+              </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gray-800 border border-green-700 shadow">
-            <CardHeader className="flex justify-between items-center pb-2">
-              <CardTitle className="text-green-400 text-sm font-semibold">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
                 Total Bookings
               </CardTitle>
-              <CalendarDays className="h-5 w-5 text-green-500" />
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-extrabold text-green-400">
-                {totalBookings}
-              </div>
+              <div className="text-2xl font-bold">{totalBookings}</div>
+              <p className="text-xs text-muted-foreground">
+                {/* You can add a dynamic comparison here if needed */}
+              </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gray-800 border border-green-700 shadow">
-            <CardHeader className="flex justify-between items-center pb-2">
-              <CardTitle className="text-green-400 text-sm font-semibold">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
                 Active Turfs
               </CardTitle>
-              <MapPin className="h-5 w-5 text-green-500" />
+              <MapPin className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-extrabold text-green-400">
-                {activeTurfs}
-              </div>
+              <div className="text-2xl font-bold">{activeTurfs}</div>
+              <p className="text-xs text-muted-foreground">
+                {/* You can add a dynamic comparison here if needed */}
+              </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gray-800 border border-green-700 shadow">
-            <CardHeader className="flex justify-between items-center pb-2">
-              <CardTitle className="text-green-400 text-sm font-semibold">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
                 Avg. Utilization
               </CardTitle>
-              <TrendingUp className="h-5 w-5 text-green-500" />
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-extrabold text-green-400">
-                {utilization}%
-              </div>
+              <div className="text-2xl font-bold">{utilization}%</div>
+              <p className="text-xs text-muted-foreground">
+                {/* You can add a dynamic comparison here if needed */}
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="grid grid-cols-5 rounded-md border border-green-700 bg-gray-800">
-            <TabsTrigger
-              value="overview"
-              className="text-green-400 data-[state=active]:bg-green-600 data-[state=active]:text-white"
-            >
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="bookings"
-              className="text-green-400 data-[state=active]:bg-green-600 data-[state=active]:text-white"
-            >
-              Bookings
-            </TabsTrigger>
-            <TabsTrigger
-              value="turfs"
-              className="text-green-400 data-[state=active]:bg-green-600 data-[state=active]:text-white"
-            >
-              Turfs
-            </TabsTrigger>
-            <TabsTrigger
-              value="calendar"
-              className="text-green-400 data-[state=active]:bg-green-600 data-[state=active]:text-white"
-            >
-              Calendar
-            </TabsTrigger>
-            <TabsTrigger
-              value="analytics"
-              className="text-green-400 data-[state=active]:bg-green-600 data-[state=active]:text-white"
-            >
-              Analytics
-            </TabsTrigger>
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="bookings">Bookings</TabsTrigger>
+            <TabsTrigger value="turfs">Turfs</TabsTrigger>
+            <TabsTrigger value="calendar">Calendar</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
 
-          {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Revenue Chart Card */}
-              <Card className="bg-gray-800 border border-green-700 shadow">
+              {/* Revenue Chart */}
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-green-400">
-                    Revenue Overview
-                  </CardTitle>
-                  <CardDescription className="text-green-300">
+                  <CardTitle>Revenue Overview</CardTitle>
+                  <CardDescription>
                     Monthly revenue and booking trends
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={revenueData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#065f46" />
-                      <XAxis dataKey="month" stroke="#22c55e" />
-                      <YAxis stroke="#22c55e" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#064e3b",
-                          borderRadius: 6,
-                        }}
-                      />
-                      <Bar dataKey="revenue" fill="#22c55e" />
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="revenue" fill="#10B981" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
 
-              {/* Sports Distribution Card */}
-              <Card className="bg-gray-800 border border-green-700 shadow">
+              {/* Sports Distribution */}
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-green-400">
-                    Sports Distribution
-                  </CardTitle>
-                  <CardDescription className="text-green-300">
+                  <CardTitle>Sports Distribution</CardTitle>
+                  <CardDescription>
                     Booking distribution by sport type
                   </CardDescription>
                 </CardHeader>
@@ -239,12 +296,7 @@ export default function AdminDashboard() {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#064e3b",
-                          borderRadius: 6,
-                        }}
-                      />
+                      <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -252,12 +304,10 @@ export default function AdminDashboard() {
             </div>
 
             {/* Recent Bookings */}
-            <Card className="bg-gray-800 border border-green-700 shadow">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-green-400">
-                  Recent Bookings
-                </CardTitle>
-                <CardDescription className="text-green-300">
+                <CardTitle>Recent Bookings</CardTitle>
+                <CardDescription>
                   Latest booking requests and confirmations
                 </CardDescription>
               </CardHeader>
@@ -266,21 +316,16 @@ export default function AdminDashboard() {
                   {liveBookings.slice(0, 5).map((booking) => (
                     <div
                       key={booking._id}
-                      className="flex items-center justify-between p-4 border border-green-700 rounded-lg hover:bg-green-900 transition"
+                      className="flex items-center justify-between p-4 border rounded-lg"
                     >
                       <div className="flex items-center space-x-4">
                         <div>
-                          <p className="font-semibold text-green-400">
-                            {booking.user}
-                          </p>
-                          <p className="text-sm text-green-300">
-                            {
-                              myTurfs.find((turf) => turf._id === booking.turf)
-                                ?.name
-                            }
+                          <p className="font-medium">{booking.user}</p>
+                          <p className="text-sm text-gray-600">
+                            {myTurfs.find(turf => turf._id === booking.turf)?.name}
                           </p>
                         </div>
-                        <div className="text-sm text-green-300">
+                        <div className="text-sm text-gray-600">
                           <p>
                             {booking.date} • {booking.timeSlot}
                           </p>
@@ -288,18 +333,10 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-green-400">
-                          ₹
-                          {
-                            myTurfs.find((turf) => turf._id === booking.turf)
-                              ?.price
-                          }
+                        <span className="font-semibold">
+                          ₹{myTurfs.find(turf => turf._id === booking.turf)?.price}
                         </span>
-                        <Badge
-                          className={`px-3 py-1 rounded-full ${getStatusColor(
-                            booking.status
-                          )}`}
-                        >
+                        <Badge className={getStatusColor(booking.status)}>
                           {booking.status}
                         </Badge>
                       </div>
@@ -310,35 +347,27 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          {/* Bookings Tab */}
           <TabsContent value="bookings" className="space-y-6">
-            <Card className="bg-gray-800 border border-green-700 shadow">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-green-400">All Bookings</CardTitle>
-                <CardDescription className="text-green-300">
-                  Manage all booking requests
-                </CardDescription>
+                <CardTitle>All Bookings</CardTitle>
+                <CardDescription>Manage all booking requests</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {liveBookings.map((booking) => (
                     <div
                       key={booking._id}
-                      className="flex items-center justify-between p-4 border border-green-700 rounded-lg hover:bg-green-900 transition"
+                      className="flex items-center justify-between p-4 border rounded-lg"
                     >
                       <div className="flex items-center space-x-4">
                         <div>
-                          <p className="font-semibold text-green-400">
-                            {booking.user}
-                          </p>
-                          <p className="text-sm text-green-300">
-                            {
-                              myTurfs.find((turf) => turf._id === booking.turf)
-                                ?.name
-                            }
+                          <p className="font-medium">{booking.user}</p>
+                          <p className="text-sm text-gray-600">
+                            {myTurfs.find(turf => turf._id === booking.turf)?.name}
                           </p>
                         </div>
-                        <div className="text-sm text-green-300">
+                        <div className="text-sm text-gray-600">
                           <p>
                             {booking.date} • {booking.timeSlot}
                           </p>
@@ -346,40 +375,17 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-green-400">
-                          ₹
-                          {
-                            myTurfs.find((turf) => turf._id === booking.turf)
-                              ?.price
-                          }
-                        </span>
-                        <Badge
-                          className={`px-3 py-1 rounded-full ${getStatusColor(
-                            booking.status
-                          )}`}
-                        >
-                          {booking.status === "waiting for approval"
-                            ? "Waiting for Approval"
-                            : booking.status.charAt(0).toUpperCase() +
-                              booking.status.slice(1)}
+                        <span className="font-semibold">₹{myTurfs.find(turf => turf._id === booking.turf)?.price}</span>
+                        <Badge className={getStatusColor(booking.status)}>
+                          {booking.status === 'waiting for approval' ? 'Waiting for Approval' : booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                         </Badge>
-                        {booking.status === "waiting for approval" && (
+                        {booking.status === 'waiting for approval' && (
                           <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-green-600 text-green-400 hover:bg-green-700 hover:text-white"
-                              onClick={() => handleApprove(booking._id)}
-                            >
+                            <Button size="sm" variant="outline" onClick={() => handleApprove(booking._id)}>
                               <CheckCircle className="w-4 h-4 mr-1" />
                               Approve
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-red-600 text-red-400 hover:bg-red-700 hover:text-white"
-                              onClick={() => handleReject(booking._id)}
-                            >
+                            <Button size="sm" variant="outline" onClick={() => handleReject(booking._id)}>
                               <XCircle className="w-4 h-4 mr-1" />
                               Reject
                             </Button>
@@ -393,12 +399,11 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          {/* Turfs Tab */}
           <TabsContent value="turfs" className="space-y-6">
-            <Card className="bg-gray-800 border border-green-700 shadow">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-green-400">Manage Turfs</CardTitle>
-                <CardDescription className="text-green-300">
+                <CardTitle>Manage Turfs</CardTitle>
+                <CardDescription>
                   Add, edit, or manage your sports venues
                 </CardDescription>
               </CardHeader>
@@ -407,55 +412,39 @@ export default function AdminDashboard() {
                   {myTurfs.map((turf) => (
                     <div
                       key={turf._id}
-                      className="flex items-center justify-between p-4 border border-green-700 rounded-lg hover:bg-green-900 transition"
+                      className="flex items-center justify-between p-4 border rounded-lg"
                     >
                       <div className="flex items-center space-x-4">
                         <div>
-                          <p className="font-semibold text-green-400">
-                            {turf.name}
-                          </p>
-                          <p className="text-sm text-green-300">
+                          <p className="font-medium">{turf.name}</p>
+                          <p className="text-sm text-gray-600">
                             {turf.location}
                           </p>
                         </div>
-                        <Badge
-                          className={`px-3 py-1 rounded-full ${getTurfStatusColor(
-                            turf.status || ""
-                          )}`}
-                        >
-                          {turf.status || "Unknown"}
+                        <Badge className={getTurfStatusColor(turf.status)}>
+                          {turf.status}
                         </Badge>
                       </div>
                       <div className="flex items-center space-x-6">
-                        <div className="text-center text-green-300 text-sm">
-                          <p className="font-semibold">{turf.bookings ?? 0}</p>
+                        <div className="text-sm text-gray-600 text-center">
+                          <p className="font-medium">{turf.bookings}</p>
                           <p>Bookings</p>
                         </div>
-                        <div className="text-center text-green-300 text-sm">
-                          <p className="font-semibold">
+                        <div className="text-sm text-gray-600 text-center">
+                          <p className="font-medium">
                             ₹{(turf.revenue ?? 0).toLocaleString()}
                           </p>
                           <p>Revenue</p>
                         </div>
-                        <div className="text-center text-green-300 text-sm">
-                          <p className="font-semibold">
-                            {turf.rating ?? "N/A"}
-                          </p>
+                        <div className="text-sm text-gray-600 text-center">
+                          <p className="font-medium">{turf.rating}</p>
                           <p>Rating</p>
                         </div>
                         <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-green-600 text-green-400 hover:bg-green-700 hover:text-white"
-                          >
+                          <Button size="sm" variant="outline">
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-red-600 text-red-400 hover:bg-red-700 hover:text-white"
-                          >
+                          <Button size="sm" variant="outline">
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -463,91 +452,64 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
-
                 <div className="mt-6">
-                  <h3 className="text-xl font-semibold text-green-400 mb-4">
-                    Add New Turf
-                  </h3>
-                  <form
-                    onSubmit={handleAddTurf}
-                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                  >
+                  <h3 className="text-lg font-medium mb-2">Add New Turf</h3>
+                  <form onSubmit={handleAddTurf} className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <input
                       type="text"
                       placeholder="Turf Name"
                       value={newTurf.name}
-                      onChange={(e) =>
-                        setNewTurf({ ...newTurf, name: e.target.value })
-                      }
-                      className="p-3 rounded-md border border-green-600 bg-gray-800 text-green-300 placeholder-green-400 focus:outline-none focus:ring-2 focus:ring-green-500"
-                      required
+                      onChange={(e) => setNewTurf({ ...newTurf, name: e.target.value })}
+                      className="p-2 rounded-md border"
                     />
                     <input
                       type="text"
                       placeholder="Location (e.g., Mumbai)"
                       value={newTurf.location}
-                      onChange={(e) =>
-                        setNewTurf({ ...newTurf, location: e.target.value })
-                      }
-                      className="p-3 rounded-md border border-green-600 bg-gray-800 text-green-300 placeholder-green-400 focus:outline-none focus:ring-2 focus:ring-green-500"
-                      required
+                      onChange={(e) => setNewTurf({ ...newTurf, location: e.target.value })}
+                      className="p-2 rounded-md border"
                     />
                     <input
                       type="text"
                       placeholder="Full Address"
                       value={newTurf.fullAddress}
-                      onChange={(e) =>
-                        setNewTurf({ ...newTurf, fullAddress: e.target.value })
-                      }
-                      className="p-3 rounded-md border border-green-600 bg-gray-800 text-green-300 placeholder-green-400 focus:outline-none focus:ring-2 focus:ring-green-500"
-                      required
+                      onChange={(e) => setNewTurf({ ...newTurf, fullAddress: e.target.value })}
+                      className="p-2 rounded-md border"
                     />
                     <input
                       type="number"
                       placeholder="Price per hour"
                       value={newTurf.price}
-                      onChange={(e) =>
-                        setNewTurf({ ...newTurf, price: e.target.value })
-                      }
-                      className="p-3 rounded-md border border-green-600 bg-gray-800 text-green-300 placeholder-green-400 focus:outline-none focus:ring-2 focus:ring-green-500"
-                      min={0}
-                      required
+                      onChange={(e) => setNewTurf({ ...newTurf, price: e.target.value })}
+                      className="p-2 rounded-md border"
                     />
-                    <Button
-                      type="submit"
-                      className="md:col-span-2 bg-green-600 hover:bg-green-700"
-                    >
-                      Add Turf
-                    </Button>
+                    <Button type="submit" className="md:col-span-2">Add Turf</Button>
                   </form>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Calendar Tab */}
           <TabsContent value="calendar" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="bg-gray-800 border border-green-700 shadow lg:col-span-1">
+              <Card className="lg:col-span-1">
                 <CardHeader>
-                  <CardTitle className="text-green-400">Select Date</CardTitle>
+                  <CardTitle>Select Date</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Calendar
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
-                    className="rounded-md border border-green-600"
+                    className="rounded-md border"
                   />
                 </CardContent>
               </Card>
 
-              <Card className="bg-gray-800 border border-green-700 shadow lg:col-span-2">
+              <Card className="lg:col-span-2">
                 <CardHeader>
-                  <CardTitle className="text-green-400">
-                    Daily Schedule
-                  </CardTitle>
-                  <CardDescription className="text-green-300">
+                  <CardTitle>Daily Schedule</CardTitle>
+                  <CardDescription>
                     {selectedDate
                       ? selectedDate.toDateString()
                       : "Select a date to view schedule"}
@@ -595,24 +557,18 @@ export default function AdminDashboard() {
                     ].map((slot, index) => (
                       <div
                         key={index}
-                        className="flex items-center justify-between p-3 bg-green-900 rounded-lg"
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                       >
                         <div className="flex items-center space-x-4">
-                          <Clock className="w-5 h-5 text-green-400" />
+                          <Clock className="w-4 h-4 text-gray-500" />
                           <div>
-                            <p className="font-semibold text-green-300">
-                              {slot.time}
-                            </p>
-                            <p className="text-green-400 text-sm">
-                              {slot.turf}
-                            </p>
+                            <p className="font-medium">{slot.time}</p>
+                            <p className="text-sm text-gray-600">{slot.turf}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold text-green-300">
-                            {slot.customer}
-                          </p>
-                          <p className="text-green-400 text-sm">{slot.sport}</p>
+                          <p className="font-medium">{slot.customer}</p>
+                          <p className="text-sm text-gray-600">{slot.sport}</p>
                         </div>
                       </div>
                     ))}
@@ -622,34 +578,26 @@ export default function AdminDashboard() {
             </div>
           </TabsContent>
 
-          {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-gray-800 border border-green-700 shadow">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-green-400">
-                    Booking Trends
-                  </CardTitle>
-                  <CardDescription className="text-green-300">
+                  <CardTitle>Booking Trends</CardTitle>
+                  <CardDescription>
                     Daily booking patterns over time
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={revenueData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#065f46" />
-                      <XAxis dataKey="month" stroke="#22c55e" />
-                      <YAxis stroke="#22c55e" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#064e3b",
-                          borderRadius: 6,
-                        }}
-                      />
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip />
                       <Line
                         type="monotone"
                         dataKey="bookings"
-                        stroke="#22c55e"
+                        stroke="#10B981"
                         strokeWidth={2}
                       />
                     </LineChart>
@@ -657,12 +605,10 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-gray-800 border border-green-700 shadow">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-green-400">Peak Hours</CardTitle>
-                  <CardDescription className="text-green-300">
-                    Most popular booking times
-                  </CardDescription>
+                  <CardTitle>Peak Hours</CardTitle>
+                  <CardDescription>Most popular booking times</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -677,17 +623,15 @@ export default function AdminDashboard() {
                         key={index}
                         className="flex items-center justify-between"
                       >
-                        <span className="text-green-400 font-semibold">
-                          {slot.time}
-                        </span>
+                        <span className="text-sm font-medium">{slot.time}</span>
                         <div className="flex items-center space-x-3">
-                          <div className="w-32 bg-green-800 rounded-full h-2">
+                          <div className="w-32 bg-gray-200 rounded-full h-2">
                             <div
-                              className="bg-green-500 h-2 rounded-full"
+                              className="bg-green-600 h-2 rounded-full"
                               style={{ width: `${slot.percentage}%` }}
                             ></div>
                           </div>
-                          <span className="text-green-300 text-sm">
+                          <span className="text-sm text-gray-600">
                             {slot.bookings} bookings
                           </span>
                         </div>
@@ -699,48 +643,38 @@ export default function AdminDashboard() {
             </div>
 
             {/* Performance Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-              <Card className="bg-gray-800 border border-green-700 shadow">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-green-400">
-                    Occupancy Rate
-                  </CardTitle>
+                  <CardTitle>Occupancy Rate</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-4xl font-extrabold text-green-500">
-                    78%
-                  </div>
-                  <p className="text-green-300 mt-2">
+                  <div className="text-3xl font-bold text-green-600">78%</div>
+                  <p className="text-sm text-gray-600 mt-2">
                     Average across all turfs
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="bg-gray-800 border border-green-700 shadow">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-green-400">
-                    Customer Satisfaction
-                  </CardTitle>
+                  <CardTitle>Customer Satisfaction</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-4xl font-extrabold text-green-500">
-                    4.7
-                  </div>
-                  <p className="text-green-300 mt-2">Average rating</p>
+                  <div className="text-3xl font-bold text-blue-600">4.7</div>
+                  <p className="text-sm text-gray-600 mt-2">Average rating</p>
                 </CardContent>
               </Card>
 
-              <Card className="bg-gray-800 border border-green-700 shadow">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-green-400">
-                    Repeat Customers
-                  </CardTitle>
+                  <CardTitle>Repeat Customers</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-4xl font-extrabold text-green-500">
-                    65%
-                  </div>
-                  <p className="text-green-300 mt-2">Return booking rate</p>
+                  <div className="text-3xl font-bold text-purple-600">65%</div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Return booking rate
+                  </p>
                 </CardContent>
               </Card>
             </div>

@@ -31,7 +31,7 @@ export default function HomePage() {
       location: "Downtown, Mumbai",
       rating: 4.8,
       price: 1200,
-      image: "/placeholder.svg?height=200&width=300",
+      image: "/images/1.png",
       sports: ["Football", "Cricket"],
       availability: "Available",
     },

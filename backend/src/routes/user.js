@@ -6,7 +6,10 @@ const userController = require('../controllers/userController');
 // Find players near you
 router.get('/find', userController.findPlayers);
 
-// Get user profile
+// Get all users
+router.get('/', userController.getAllUsers); 
+
+// Get user profile by ID
 router.get('/:id', userController.getProfile);
 
-module.exports = router; 
+module.exports = router;

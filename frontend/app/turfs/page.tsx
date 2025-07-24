@@ -31,7 +31,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { useUser } from "@/contexts/UserContext";
 import { useRouter } from "next/navigation";
-
+import TSEC from "@/public/TSEC.png";
 export default function TurfsPage() {
   const [turfs, setTurfs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,10 +100,8 @@ export default function TurfsPage() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">TB</span>
-              </div>
-              <span className="text-xl font-bold text-white">TurfBook</span>
+              
+              <span className="text-xl font-bold text-white">TSEC</span>
             </Link>
             <nav className="hidden md:flex items-center space-x-6">
               <Link
@@ -127,7 +125,7 @@ export default function TurfsPage() {
                     onClick={() =>
                       router.push(
                         user.userType === "admin"
-                          ? "/admin-dashboard"
+                          ? "/admin"
                           : "/player-dashboard"
                       )
                     }

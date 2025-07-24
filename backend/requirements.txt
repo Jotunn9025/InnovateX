@@ -1,0 +1,8 @@
+express
+mongoose
+cors
+dotenv
+socket.io
+twilio
+nodemailer
+qrcode 
