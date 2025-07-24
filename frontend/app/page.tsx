@@ -22,6 +22,8 @@ import TSEC from "@/public/TSEC.png";
 import Link from "next/link";
 import { useUser } from "@/contexts/UserContext";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import axios from "axios";
 
 export default function HomePage() {
   const featuredTurfs = [
@@ -76,6 +78,52 @@ export default function HomePage() {
 
   const { user, setUser } = useUser();
   const router = useRouter();
+
+  // Chat widget state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatHistory, setChatHistory] = useState<
+    { user: string; assistant: string }[]
+  >([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (chatOpen && chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatHistory, chatOpen]);
+
+  const handleSendChat = async (e?: any) => {
+    if (e) e.preventDefault();
+    if (!chatInput.trim()) return;
+    const userMessage = chatInput.trim();
+    setChatHistory((prev) => [
+      ...prev,
+      { user: userMessage, assistant: "..." },
+    ]);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const res = await axios.post("http://localhost:8000/chat", {
+        message: userMessage,
+      });
+      const reply = res.data.reply;
+      setChatHistory((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1].assistant = reply;
+        return updated;
+      });
+    } catch (err) {
+      setChatHistory((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1].assistant = "Sorry, there was an error.";
+        return updated;
+      });
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     setUser(null);
@@ -531,6 +579,83 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Chat Widget */}
+      <div className="fixed bottom-6 right-6 z-50">
+        {!chatOpen && (
+          <button
+            className="bg-emerald-600 text-white rounded-full shadow-lg p-4 flex items-center hover:bg-emerald-700 transition"
+            onClick={() => setChatOpen(true)}
+            aria-label="Open chat"
+          >
+            <svg width="28" height="28" fill="none" viewBox="0 0 24 24">
+              <path
+                d="M12 22c5.523 0 10-4.03 10-9s-4.477-9-10-9S2 3.03 2 8c0 2.21 1.343 4.21 3.5 5.5V22l6.5-3.5z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+        )}
+        {chatOpen && (
+          <div className="w-80 bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
+            <div className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between">
+              <span className="font-semibold">Chat</span>
+              <button
+                onClick={() => setChatOpen(false)}
+                className="text-white hover:text-gray-200"
+              >
+                ×
+              </button>
+            </div>
+            <div
+              className="flex-1 p-3 overflow-y-auto max-h-96"
+              style={{ minHeight: 200 }}
+            >
+              {chatHistory.length === 0 && (
+                <div className="text-gray-500 text-center mt-8">
+                  How may I help you?
+                </div>
+              )}
+              {chatHistory.map((msg, idx) => (
+                <div key={idx} className="mb-4">
+                  <div className="text-right">
+                    <span className="inline-block bg-emerald-100 text-emerald-900 rounded-lg px-3 py-1 text-sm mb-1 max-w-[80%]">
+                      {msg.user}
+                    </span>
+                  </div>
+                  <div className="text-left">
+                    <span className="inline-block bg-gray-100 text-gray-900 rounded-lg px-3 py-1 text-sm max-w-[80%]">
+                      {msg.assistant}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              <div ref={chatBottomRef} />
+            </div>
+            <form
+              onSubmit={handleSendChat}
+              className="flex border-t border-gray-200"
+            >
+              <input
+                type="text"
+                className="flex-1 px-3 py-2 text-sm focus:outline-none"
+                placeholder="Type your message..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                disabled={chatLoading}
+                autoFocus
+              />
+              <button
+                type="submit"
+                className="bg-emerald-600 text-white px-4 py-2 text-sm font-semibold hover:bg-emerald-700 transition"
+                disabled={chatLoading || !chatInput.trim()}
+              >
+                Send
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

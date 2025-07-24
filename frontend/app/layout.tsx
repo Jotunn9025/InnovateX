@@ -7,7 +7,7 @@ import { UserProvider } from "@/contexts/UserContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "TurfBook - Book Sports Venues & Connect with Players",
+  title: "TurfSetConnect - Book Sports Venues & Connect with Players",
   description:
     "Find and book premium sports facilities, connect with players, join tournaments, and build your sports community.",
 };

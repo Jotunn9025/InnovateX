@@ -140,7 +140,13 @@ export default function AdminDashboard() {
   const totalBookings = liveBookings.length;
   const totalRevenue = liveBookings.reduce((sum, b) => {
     const turf = myTurfs.find((t) => t._id === t._id);
-    return sum + (turf ? turf.price : 0);
+    if (!turf || !turf.prices) return sum;
+    // Get day and hour from booking
+    const dateObj = new Date(b.date);
+    const day = dateObj.getDay();
+    const hour = parseInt(b.timeSlot.split(":")[0], 10);
+    const price = turf.prices[day]?.[hour] ?? 0;
+    return sum + price;
   }, 0);
   const activeTurfs = myTurfs.length;
   // Example utilization: bookings per turf per day (simple version)
