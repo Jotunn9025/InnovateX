@@ -80,4 +80,4 @@ with open(filename, "w", newline="") as file:
     writer.writerow(["Date", "Day", "Location", "TimeSlot", "Sport", "Price"])
     writer.writerows(data)
 
-print(f"CSV generated: {filename} with {len(data)} rows.")
+print(f"✅ CSV generated: {filename} with {len(data)} rows.")
