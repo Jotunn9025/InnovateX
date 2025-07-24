@@ -6,7 +6,7 @@ const turfSchema = new mongoose.Schema({
   fullAddress: String,
   rating: Number,
   reviews: Number,
-  price: Number,
+  prices: [[Number]], // [day][slot] pricing
   originalPrice: Number,
   images: [String],
   sports: [String],
@@ -16,10 +16,14 @@ const turfSchema = new mongoose.Schema({
   owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   availability: {
     type: mongoose.Schema.Types.Mixed,
-    default: {}
+    default: {},
   },
   startTime: { type: String }, // e.g., "08:00"
-  endTime: { type: String }    // e.g., "22:00"
+  endTime: { type: String }, // e.g., "22:00"
 });
 
-module.exports = mongoose.model('Turf', turfSchema);
+turfSchema.methods.getLowestPrice = function () {
+  return Math.min(...this.prices.flat());
+};
+
+module.exports = mongoose.model("Turf", turfSchema);

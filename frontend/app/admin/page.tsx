@@ -57,7 +57,8 @@ interface Turf {
   name: string;
   location: string;
   fullAddress: string;
-  price: number;
+  prices: number[][];
+  lowestPrice: number;
   [key: string]: any;
 }
 
@@ -69,67 +70,107 @@ export default function AdminDashboard() {
   const socketRef = useRef<Socket | null>(null);
   const { user } = useUser();
   // For adding a new turf
-  const [newTurf, setNewTurf] = useState({ name: "", location: "", fullAddress: "", price: "" });
+  const [newTurf, setNewTurf] = useState({
+    name: "",
+    location: "",
+    fullAddress: "",
+  });
   const [myTurfs, setMyTurfs] = useState<Turf[]>([]);
 
   useEffect(() => {
     if (!user) return;
     const socket = io("http://localhost:5000");
     socketRef.current = socket;
-    socket.emit("register", { userId: user.id, userType: user.userType, email: user.email });
+    socket.emit("register", {
+      userId: user.id,
+      userType: user.userType,
+      email: user.email,
+    });
     socket.on("new-booking", ({ booking }: { booking: Booking }) => {
       setLiveBookings((prev) => [booking, ...prev]);
     });
     // Fetch my turfs
-    axios.get(`http://localhost:5000/api/turfs?owner=${user.id}`).then(res => setMyTurfs(res.data.turfs.filter((t: Turf) => t.owner === user.id)));
+    axios
+      .get(`http://localhost:5000/api/turfs?owner=${user.id}`)
+      .then((res) =>
+        setMyTurfs(res.data.turfs.filter((t: Turf) => t.owner === user.id))
+      );
     // Fetch all bookings for my turfs
-    axios.get(`http://localhost:5000/api/bookings/admin?ownerId=${user.id}`).then(res => setLiveBookings(res.data.bookings));
-    return () => { socket.disconnect(); };
+    axios
+      .get(`http://localhost:5000/api/bookings/admin?ownerId=${user.id}`)
+      .then((res) => setLiveBookings(res.data.bookings));
+    return () => {
+      socket.disconnect();
+    };
   }, [user]);
 
   const handleApprove = (bookingId: string) => {
     if (socketRef.current) {
       socketRef.current.emit("approve-booking", { bookingId });
-      setLiveBookings((prev) => prev.map(b => b._id === bookingId ? { ...b, status: 'approved' } : b));
+      setLiveBookings((prev) =>
+        prev.map((b) =>
+          b._id === bookingId ? { ...b, status: "approved" } : b
+        )
+      );
     }
   };
   const handleReject = (bookingId: string) => {
     if (socketRef.current) {
       socketRef.current.emit("reject-booking", { bookingId });
-      setLiveBookings((prev) => prev.map(b => b._id === bookingId ? { ...b, status: 'rejected' } : b));
+      setLiveBookings((prev) =>
+        prev.map((b) =>
+          b._id === bookingId ? { ...b, status: "rejected" } : b
+        )
+      );
     }
   };
 
   const handleAddTurf = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    const res = await axios.post("http://localhost:5000/api/turfs", { ...newTurf, price: Number(newTurf.price), owner: user.id });
+    const res = await axios.post("http://localhost:5000/api/turfs", {
+      ...newTurf,
+      owner: user.id,
+    });
     setMyTurfs((prev) => [...prev, res.data.turf]);
-    setNewTurf({ name: "", location: "", fullAddress: "", price: "" });
+    setNewTurf({ name: "", location: "", fullAddress: "" });
   };
 
   // Calculate dynamic stats
   const totalBookings = liveBookings.length;
   const totalRevenue = liveBookings.reduce((sum, b) => {
-    const turf = myTurfs.find(t => t._id === t._id);
+    const turf = myTurfs.find((t) => t._id === t._id);
     return sum + (turf ? turf.price : 0);
   }, 0);
   const activeTurfs = myTurfs.length;
   // Example utilization: bookings per turf per day (simple version)
-  const utilization = activeTurfs > 0 ? Math.round((totalBookings / activeTurfs) * 10) : 0;
+  const utilization =
+    activeTurfs > 0 ? Math.round((totalBookings / activeTurfs) * 10) : 0;
 
   // Analytics: group bookings by month and sport
   const revenueByMonth: { [month: string]: number } = {};
   const bookingsByMonth: { [month: string]: number } = {};
   const sportsCount: { [sport: string]: number } = {};
-  liveBookings.forEach(b => {
-    const month = new Date(b.date).toLocaleString('default', { month: 'short' });
-    revenueByMonth[month] = (revenueByMonth[month] || 0) + (myTurfs.find(t => t._id === b.turf)?.price || 0);
+  liveBookings.forEach((b) => {
+    const month = new Date(b.date).toLocaleString("default", {
+      month: "short",
+    });
+    revenueByMonth[month] =
+      (revenueByMonth[month] || 0) +
+      (myTurfs.find((t) => t._id === b.turf)?.price || 0);
     bookingsByMonth[month] = (bookingsByMonth[month] || 0) + 1;
     sportsCount[b.sport] = (sportsCount[b.sport] || 0) + 1;
   });
-  const revenueData = Object.keys(revenueByMonth).map(month => ({ month, revenue: revenueByMonth[month], bookings: bookingsByMonth[month] }));
-  const sportsData = Object.keys(sportsCount).map(sport => ({ name: sport, value: sportsCount[sport], color: '#10B981' }));
+  const revenueData = Object.keys(revenueByMonth).map((month) => ({
+    month,
+    revenue: revenueByMonth[month],
+    bookings: bookingsByMonth[month],
+  }));
+  const sportsData = Object.keys(sportsCount).map((sport) => ({
+    name: sport,
+    value: sportsCount[sport],
+    color: "#10B981",
+  }));
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -322,7 +363,10 @@ export default function AdminDashboard() {
                         <div>
                           <p className="font-medium">{booking.user}</p>
                           <p className="text-sm text-gray-600">
-                            {myTurfs.find(turf => turf._id === booking.turf)?.name}
+                            {
+                              myTurfs.find((turf) => turf._id === booking.turf)
+                                ?.name
+                            }
                           </p>
                         </div>
                         <div className="text-sm text-gray-600">
@@ -334,7 +378,11 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex items-center space-x-4">
                         <span className="font-semibold">
-                          ₹{myTurfs.find(turf => turf._id === booking.turf)?.price}
+                          ₹
+                          {
+                            myTurfs.find((turf) => turf._id === booking.turf)
+                              ?.price
+                          }
                         </span>
                         <Badge className={getStatusColor(booking.status)}>
                           {booking.status}
@@ -364,7 +412,10 @@ export default function AdminDashboard() {
                         <div>
                           <p className="font-medium">{booking.user}</p>
                           <p className="text-sm text-gray-600">
-                            {myTurfs.find(turf => turf._id === booking.turf)?.name}
+                            {
+                              myTurfs.find((turf) => turf._id === booking.turf)
+                                ?.name
+                            }
                           </p>
                         </div>
                         <div className="text-sm text-gray-600">
@@ -375,17 +426,34 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-4">
-                        <span className="font-semibold">₹{myTurfs.find(turf => turf._id === booking.turf)?.price}</span>
+                        <span className="font-semibold">
+                          ₹
+                          {
+                            myTurfs.find((turf) => turf._id === booking.turf)
+                              ?.price
+                          }
+                        </span>
                         <Badge className={getStatusColor(booking.status)}>
-                          {booking.status === 'waiting for approval' ? 'Waiting for Approval' : booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                          {booking.status === "waiting for approval"
+                            ? "Waiting for Approval"
+                            : booking.status.charAt(0).toUpperCase() +
+                              booking.status.slice(1)}
                         </Badge>
-                        {booking.status === 'waiting for approval' && (
+                        {booking.status === "waiting for approval" && (
                           <div className="flex space-x-2">
-                            <Button size="sm" variant="outline" onClick={() => handleApprove(booking._id)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleApprove(booking._id)}
+                            >
                               <CheckCircle className="w-4 h-4 mr-1" />
                               Approve
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleReject(booking._id)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleReject(booking._id)}
+                            >
                               <XCircle className="w-4 h-4 mr-1" />
                               Reject
                             </Button>
@@ -454,37 +522,11 @@ export default function AdminDashboard() {
                 </div>
                 <div className="mt-6">
                   <h3 className="text-lg font-medium mb-2">Add New Turf</h3>
-                  <form onSubmit={handleAddTurf} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      placeholder="Turf Name"
-                      value={newTurf.name}
-                      onChange={(e) => setNewTurf({ ...newTurf, name: e.target.value })}
-                      className="p-2 rounded-md border"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Location (e.g., Mumbai)"
-                      value={newTurf.location}
-                      onChange={(e) => setNewTurf({ ...newTurf, location: e.target.value })}
-                      className="p-2 rounded-md border"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Full Address"
-                      value={newTurf.fullAddress}
-                      onChange={(e) => setNewTurf({ ...newTurf, fullAddress: e.target.value })}
-                      className="p-2 rounded-md border"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Price per hour"
-                      value={newTurf.price}
-                      onChange={(e) => setNewTurf({ ...newTurf, price: e.target.value })}
-                      className="p-2 rounded-md border"
-                    />
-                    <Button type="submit" className="md:col-span-2">Add Turf</Button>
-                  </form>
+                  <a href="/admin/add-turf">
+                    <Button className="w-full md:col-span-2">
+                      Add New Turf
+                    </Button>
+                  </a>
                 </div>
               </CardContent>
             </Card>

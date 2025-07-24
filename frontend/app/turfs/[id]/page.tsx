@@ -63,7 +63,14 @@ import React from "react";
 import { useUser } from "@/contexts/UserContext";
 import { useRouter } from "next/navigation";
 import io from "socket.io-client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface Amenity {
   name: string;
@@ -86,7 +93,8 @@ interface Turf {
   };
   rating: number;
   reviews: number;
-  price: number;
+  prices: number[][];
+  lowestPrice: number;
   originalPrice: number;
   availability: any;
   description: string;
@@ -129,8 +137,8 @@ export default function TurfDetailPage({
   const socketRef = useRef(null);
   const [lastBookingId, setLastBookingId] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
-  const [upiId, setUpiId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState("UPI");
+  const [upiId, setUpiId] = useState("");
   const [isPaying, setIsPaying] = useState(false);
   const [userBookings, setUserBookings] = useState<any[]>([]);
 
@@ -168,21 +176,32 @@ export default function TurfDetailPage({
     const socket = io("http://localhost:5000");
     socketRef.current = socket;
     if (user) {
-      socket.emit("register", { userId: user.id, userType: user.userType, email: user.email });
+      socket.emit("register", {
+        userId: user.id,
+        userType: user.userType,
+        email: user.email,
+      });
     }
-    socket.on("booking-status", ({ bookingId, status }: { bookingId: string; status: string }) => {
-      if (lastBookingId && bookingId === lastBookingId) {
-        alert(`Your booking was ${status}`);
+    socket.on(
+      "booking-status",
+      ({ bookingId, status }: { bookingId: string; status: string }) => {
+        if (lastBookingId && bookingId === lastBookingId) {
+          alert(`Your booking was ${status}`);
+        }
       }
-    });
-    return () => { socket.disconnect(); };
+    );
+    return () => {
+      socket.disconnect();
+    };
   }, [user, lastBookingId]);
 
   useEffect(() => {
     // Fetch all bookings for this turf and date
     const fetchBookings = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/bookings/user/${user?.id}`);
+        const res = await axios.get(
+          `http://localhost:5000/api/bookings/user/${user?.id}`
+        );
         setUserBookings(res.data.bookings);
       } catch (err) {
         setUserBookings([]);
@@ -195,13 +214,14 @@ export default function TurfDetailPage({
   const getSlotStatus = (date: Date, time: string) => {
     const dateKey = format(date, "yyyy-MM-dd");
     // Find bookings for this turf, date, and timeSlot
-    const bookings = userBookings.filter(b =>
-      b.turf === turf?.name &&
-      format(new Date(b.date), "yyyy-MM-dd") === dateKey &&
-      b.timeSlot === time
+    const bookings = userBookings.filter(
+      (b) =>
+        b.turf === turf?.name &&
+        format(new Date(b.date), "yyyy-MM-dd") === dateKey &&
+        b.timeSlot === time
     );
     if (bookings.length > 0) {
-      const myBooking = bookings.find(b => b.user === user?.id);
+      const myBooking = bookings.find((b) => b.user === user?.id);
       if (myBooking) return myBooking.status;
       // If not my booking, return the first status (should be 'waiting for approval', 'approved', or 'waitlist')
       return bookings[0].status;
@@ -227,7 +247,6 @@ export default function TurfDetailPage({
   const amenities = turf.amenities || [];
   const rules = turf.rules || [];
   const owner = turf.owner || { name: "N/A", phone: "N/A", email: "N/A" };
-
   const reviews = [
     {
       id: 1,
@@ -263,6 +282,13 @@ export default function TurfDetailPage({
     end: endOfWeek(currentWeek),
   });
 
+  const getTimeSlotPrice = (date: Date, time: string) => {
+    if (!turf || !turf.prices) return turf?.lowestPrice || 1000;
+    const day = date.getDay();
+    const hour = parseInt(time.split(":")[0], 10);
+    return turf.prices[day]?.[hour] ?? turf.lowestPrice ?? 1000;
+  };
+
   const getTimeSlotAvailability = (date: Date, time: string) => {
     const dateKey = format(date, "yyyy-MM-dd");
     const availability = turf.availability?.[dateKey]?.[time];
@@ -270,15 +296,14 @@ export default function TurfDetailPage({
     return (
       availability || {
         available: true,
-        price: turf.price,
+        price: getTimeSlotPrice(date, time),
       }
     );
   };
 
   const calculatePrice = () => {
     if (!selectedTime || !selectedDuration) return 0;
-    const basePrice =
-      getTimeSlotAvailability(selectedDate, selectedTime).price || turf.price;
+    const basePrice = getTimeSlotPrice(selectedDate, selectedTime);
     return basePrice * Number.parseInt(selectedDuration);
   };
 
@@ -466,19 +491,23 @@ export default function TurfDetailPage({
                 <div className="flex items-center gap-6 p-4 bg-gray-700/30 rounded-xl">
                   <div className="flex items-center gap-3">
                     <span className="text-4xl font-bold text-emerald-400">
-                      ₹{turf.price}
+                      ₹
+                      {(() => {
+                        const allPrices = turf.prices
+                          .flat()
+                          .filter((price) => price != null && price > 0);
+                        return allPrices.length > 0
+                          ? Math.min(...allPrices)
+                          : 0;
+                      })()}
+                      + 
                     </span>
-                    {turf.originalPrice > turf.price && (
-                      <span className="text-xl text-gray-500 line-through">
-                        ₹{turf.originalPrice}
-                      </span>
-                    )}
                   </div>
                   <span className="text-gray-400 text-lg">per hour</span>
-                  {turf.originalPrice > turf.price && (
+                  {turf.originalPrice > turf.lowestPrice && (
                     <Badge className="bg-gradient-to-r from-red-600 to-red-700 text-white">
                       {Math.round(
-                        ((turf.originalPrice - turf.price) /
+                        ((turf.originalPrice - turf.lowestPrice) /
                           turf.originalPrice) *
                           100
                       )}
@@ -527,11 +556,8 @@ export default function TurfDetailPage({
                           key={index}
                           className="flex items-center space-x-3 p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition-colors duration-200"
                         >
-                          {amenity.icon && (
-                            <amenity.icon className="w-6 h-6 text-emerald-400" />
-                          )}
                           <span className="text-gray-300 font-medium">
-                            {amenity.name}
+                            {amenity}
                           </span>
                         </div>
                       ))}
@@ -572,20 +598,19 @@ export default function TurfDetailPage({
                         </p>
                       </div>
                       <div className="h-64 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-600">
-  <div className="text-center w-full h-full">
-    <iframe
-      title="Google Map"
-      src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3651.5449798045586!2d72.84495151543115!3d19.04188198710478!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3be7ce347acc47e3%3A0x688148bd4ffd1bce7ef682b6!2sYour%20Place%20Name!5e0!3m2!1sen!2sin!4v1688711787871!5m2!1sen!2sin"
-      width="100%"
-      height="100%"
-      style={{ border: 0, borderRadius: '0.75rem' }}
-      allowFullScreen=""
-      loading="lazy"
-      referrerPolicy="no-referrer-when-downgrade"
-    ></iframe>
-  </div>
-</div>
-
+                        <div className="text-center w-full h-full">
+                          <iframe
+                            title="Google Map"
+                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3651.5449798045586!2d72.84495151543115!3d19.04188198710478!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3be7ce347acc47e3%3A0x688148bd4ffd1bce7ef682b6!2sYour%20Place%20Name!5e0!3m2!1sen!2sin!4v1688711787871!5m2!1sen!2sin"
+                            width="100%"
+                            height="100%"
+                            style={{ border: 0, borderRadius: "0.75rem" }}
+                            allowFullScreen=""
+                            loading="lazy"
+                            referrerPolicy="no-referrer-when-downgrade"
+                          ></iframe>
+                        </div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -731,8 +756,18 @@ export default function TurfDetailPage({
                                     selectedDate,
                                     slot.time
                                   );
-                                  const slotStatus = getSlotStatus(selectedDate, slot.time);
-                                  const isMine = userBookings.some(b => b.turf === turf.name && format(new Date(b.date), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd") && b.timeSlot === slot.time && b.user === user?.id);
+                                  const slotStatus = getSlotStatus(
+                                    selectedDate,
+                                    slot.time
+                                  );
+                                  const isMine = userBookings.some(
+                                    (b) =>
+                                      b.turf === turf.name &&
+                                      format(new Date(b.date), "yyyy-MM-dd") ===
+                                        format(selectedDate, "yyyy-MM-dd") &&
+                                      b.timeSlot === slot.time &&
+                                      b.user === user?.id
+                                  );
                                   return (
                                     <Button
                                       key={slot.time}
@@ -742,10 +777,18 @@ export default function TurfDetailPage({
                                           : "outline"
                                       }
                                       size="sm"
-                                      disabled={slotStatus === 'approved' || (slotStatus === 'waiting for approval' && !isMine)}
+                                      disabled={
+                                        slotStatus === "approved" ||
+                                        (slotStatus ===
+                                          "waiting for approval" &&
+                                          !isMine)
+                                      }
                                       onClick={() => setSelectedTime(slot.time)}
                                       className={`text-xs ${
-                                        slotStatus === 'approved' || (slotStatus === 'waiting for approval' && !isMine)
+                                        slotStatus === "approved" ||
+                                        (slotStatus ===
+                                          "waiting for approval" &&
+                                          !isMine)
                                           ? "bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed opacity-50"
                                           : selectedTime === slot.time
                                           ? "bg-emerald-600 text-white border-emerald-600"
@@ -760,17 +803,29 @@ export default function TurfDetailPage({
                                         {slotStatus && (
                                           <div className="text-xs mt-1">
                                             {isMine
-                                              ? slotStatus === 'waitlist'
-                                                ? 'You are on waitlist'
-                                                : slotStatus === 'waiting for approval'
-                                                ? 'Your booking is pending'
-                                                : slotStatus.charAt(0).toUpperCase() + slotStatus.slice(1)
-                                              : slotStatus.charAt(0).toUpperCase() + slotStatus.slice(1)}
+                                              ? slotStatus === "waitlist"
+                                                ? "You are on waitlist"
+                                                : slotStatus ===
+                                                  "waiting for approval"
+                                                ? "Your booking is pending"
+                                                : slotStatus
+                                                    .charAt(0)
+                                                    .toUpperCase() +
+                                                  slotStatus.slice(1)
+                                              : slotStatus
+                                                  .charAt(0)
+                                                  .toUpperCase() +
+                                                slotStatus.slice(1)}
                                           </div>
                                         )}
                                       </div>
-                                      {!availability.available && <XCircle className="w-3 h-3 ml-1" />}
-                                      {availability.available && selectedTime === slot.time && <CheckCircle className="w-3 h-3 ml-1" />}
+                                      {!availability.available && (
+                                        <XCircle className="w-3 h-3 ml-1" />
+                                      )}
+                                      {availability.available &&
+                                        selectedTime === slot.time && (
+                                          <CheckCircle className="w-3 h-3 ml-1" />
+                                        )}
                                     </Button>
                                   );
                                 })}
@@ -887,11 +942,13 @@ export default function TurfDetailPage({
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center">
                           <span className="text-white font-semibold">
-                            {(owner?.name?.charAt(0) || "N/A")}
+                            {owner?.name?.charAt(0) || "N/A"}
                           </span>
                         </div>
                         <div>
-                          <p className="text-white font-medium">Nitish Agrawal</p>
+                          <p className="text-white font-medium">
+                            Nitish Agrawal
+                          </p>
                           <p className="text-xs text-gray-400">
                             {owner.responseTime}
                           </p>
@@ -957,10 +1014,12 @@ export default function TurfDetailPage({
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="block font-medium mb-1">Select Payment Method</label>
+              <label className="block font-medium mb-1">
+                Select Payment Method
+              </label>
               <select
                 value={paymentMethod}
-                onChange={e => setPaymentMethod(e.target.value)}
+                onChange={(e) => setPaymentMethod(e.target.value)}
                 className="w-full p-2 border rounded"
               >
                 <option value="UPI">UPI</option>
@@ -969,23 +1028,28 @@ export default function TurfDetailPage({
                 <option value="Wallet">Wallet</option>
               </select>
             </div>
-            {paymentMethod === 'UPI' && (
+            {paymentMethod === "UPI" && (
               <div>
                 <label className="block font-medium mb-1">Enter UPI ID</label>
                 <input
                   type="text"
                   value={upiId}
-                  onChange={e => setUpiId(e.target.value)}
+                  onChange={(e) => setUpiId(e.target.value)}
                   placeholder="yourupi@bank"
                   className="w-full p-2 border rounded"
                 />
               </div>
             )}
-            <div className="text-lg font-bold">Amount to Pay: ₹{Math.round((calculatePrice() + 50) * 1.18)}</div>
+            <div className="text-lg font-bold">
+              Amount to Pay: ₹{Math.round((calculatePrice() + 50) * 1.18)}
+            </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleFakePayment} disabled={isPaying || (paymentMethod === 'UPI' && !upiId)}>
-              {isPaying ? 'Processing...' : 'Pay'}
+            <Button
+              onClick={handleFakePayment}
+              disabled={isPaying || (paymentMethod === "UPI" && !upiId)}
+            >
+              {isPaying ? "Processing..." : "Pay"}
             </Button>
           </DialogFooter>
         </DialogContent>

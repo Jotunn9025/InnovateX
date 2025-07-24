@@ -100,7 +100,6 @@ export default function TurfsPage() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center space-x-2">
-              
               <span className="text-xl font-bold text-white">TSEC</span>
             </Link>
             <nav className="hidden md:flex items-center space-x-6">
@@ -253,6 +252,9 @@ export default function TurfsPage() {
                 </SelectItem>
                 <SelectItem value="malad" className="text-white">
                   Malad
+                </SelectItem>
+                <SelectItem value="dharavi" className="text-white">
+                  Dharavi
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -407,7 +409,7 @@ export default function TurfsPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-2xl font-bold text-emerald-400">
-                        ₹{turf.price}
+                        ₹{turf.lowestPrice} onwards
                       </span>
                       {turf.originalPrice > turf.price && (
                         <span className="text-sm text-slate-500 line-through">
