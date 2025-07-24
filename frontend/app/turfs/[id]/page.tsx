@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -35,71 +35,144 @@ import {
   Share2,
   CheckCircle,
   XCircle,
+  Clock,
+  Calendar as CalendarIcon,
+  MapIcon,
+  AirVent,
+  Zap,
+  Wind,
+  Droplets,
+  Sun,
+  Moon,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { format } from "date-fns";
+import {
+  format,
+  addDays,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameDay,
+  isToday,
+} from "date-fns";
+import axios from "axios";
+import React from "react";
+import { useUser } from "@/contexts/UserContext";
+import { useRouter } from "next/navigation";
 
-export default function TurfDetailPage({ params }: { params: { id: string } }) {
-  const [selectedDate, setSelectedDate] = useState<Date>();
+interface Amenity {
+  name: string;
+  icon: React.ComponentType<any>;
+}
+
+interface Turf {
+  _id: string;
+  name: string;
+  location: string;
+  images: string[];
+  sports: string[];
+  amenities: Amenity[];
+  rules: string[];
+  owner: {
+    name: string;
+    phone: string;
+    email: string;
+    responseTime: string;
+  };
+  rating: number;
+  reviews: number;
+  price: number;
+  originalPrice: number;
+  availability: any;
+  description: string;
+  fullAddress: string;
+}
+
+const timeSlots = [
+  { time: "06:00", label: "6:00 AM", period: "morning" },
+  { time: "07:00", label: "7:00 AM", period: "morning" },
+  { time: "08:00", label: "8:00 AM", period: "morning" },
+  { time: "09:00", label: "9:00 AM", period: "morning" },
+  { time: "10:00", label: "10:00 AM", period: "morning" },
+  { time: "11:00", label: "11:00 AM", period: "morning" },
+  { time: "12:00", label: "12:00 PM", period: "afternoon" },
+  { time: "13:00", label: "1:00 PM", period: "afternoon" },
+  { time: "14:00", label: "2:00 PM", period: "afternoon" },
+  { time: "15:00", label: "3:00 PM", period: "afternoon" },
+  { time: "16:00", label: "4:00 PM", period: "afternoon" },
+  { time: "17:00", label: "5:00 PM", period: "evening" },
+  { time: "18:00", label: "6:00 PM", period: "evening" },
+  { time: "19:00", label: "7:00 PM", period: "evening" },
+  { time: "20:00", label: "8:00 PM", period: "evening" },
+  { time: "21:00", label: "9:00 PM", period: "evening" },
+  { time: "22:00", label: "10:00 PM", period: "night" },
+  { time: "23:00", label: "11:00 PM", period: "night" },
+];
+
+export default function TurfDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const [turf, setTurf] = useState<Turf | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState("");
   const [selectedDuration, setSelectedDuration] = useState("1");
+  const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
 
-  // Mock data - in real app, fetch based on params.id
-  const turf = {
-    id: 1,
-    name: "Elite Sports Arena",
-    location: "Downtown, Mumbai",
-    fullAddress: "123 Sports Complex, Downtown, Mumbai, Maharashtra 400001",
-    rating: 4.8,
-    reviews: 124,
-    price: 1200,
-    originalPrice: 1500,
-    images: [
-      "/placeholder.svg?height=400&width=600&text=Main+Field",
-      "/placeholder.svg?height=400&width=600&text=Changing+Room",
-      "/placeholder.svg?height=400&width=600&text=Parking+Area",
-      "/placeholder.svg?height=400&width=600&text=Night+View",
-    ],
-    sports: ["Football", "Cricket"],
-    amenities: [
-      { name: "Parking", icon: Car },
-      { name: "Changing Room", icon: Users },
-      { name: "Floodlights", icon: Shield },
-      { name: "WiFi", icon: Wifi },
-      { name: "Cafeteria", icon: Coffee },
-      { name: "First Aid", icon: Shield },
-    ],
-    description:
-      "Premium sports facility with state-of-the-art infrastructure. Perfect for professional matches and casual games alike. Features include modern changing rooms, ample parking, and excellent lighting for night games.",
-    rules: [
-      "No smoking or alcohol allowed",
-      "Proper sports attire required",
-      "Maximum 22 players for football",
-      "Booking cancellation allowed up to 2 hours before",
-      "Damage to property will be charged",
-    ],
-    owner: {
-      name: "Sports Arena Management",
-      phone: "+91 98765 43210",
-      email: "info@elitesportsarena.com",
-      responseTime: "Usually responds within 1 hour",
-    },
-    availability: {
-      "2024-12-15": {
-        "09:00": { available: true, price: 1000 },
-        "10:00": { available: true, price: 1000 },
-        "11:00": { available: false, price: 1200 },
-        "14:00": { available: true, price: 1200 },
-        "15:00": { available: true, price: 1200 },
-        "16:00": { available: true, price: 1200 },
-        "17:00": { available: false, price: 1500 },
-        "18:00": { available: true, price: 1500 },
-        "19:00": { available: true, price: 1500 },
-        "20:00": { available: true, price: 1500 },
-      },
-    },
+  const unwrappedParams = React.use(params);
+  const turfId = unwrappedParams.id;
+
+  const { user, setUser } = useUser();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    setUser(null);
+    router.push("/");
   };
+
+  useEffect(() => {
+    const fetchTurf = async () => {
+      try {
+        console.log(`Fetching turf with ID: ${turfId}`);
+        const res = await axios.get(
+          `http://localhost:5000/api/turfs/${turfId}`
+        );
+        console.log("API response:", res);
+        setTurf(res.data.turf);
+      } catch (err: any) {
+        console.error("Error fetching turf:", err);
+        setError(err.response?.data?.message || "Failed to fetch turf");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTurf();
+  }, [turfId]);
+
+  if (loading)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-400 mx-auto"></div>
+          <p className="text-white mt-4">Loading turf details...</p>
+        </div>
+      </div>
+    );
+  if (error)
+    return <div className="text-center text-red-500 py-12">{error}</div>;
+  if (!turf)
+    return <div className="text-center text-red-500 py-12">Turf not found</div>;
+
+  const images = turf.images || [];
+  const amenities = turf.amenities || [];
+  const rules = turf.rules || [];
+  const owner = turf.owner || { name: "N/A", phone: "N/A", email: "N/A" };
 
   const reviews = [
     {
@@ -131,44 +204,114 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
     },
   ];
 
-  const timeSlots = selectedDate
-    ? turf.availability[format(selectedDate, "yyyy-MM-dd")] || {}
-    : {};
+  const weekDays = eachDayOfInterval({
+    start: startOfWeek(currentWeek),
+    end: endOfWeek(currentWeek),
+  });
+
+  const getTimeSlotAvailability = (date: Date, time: string) => {
+    const dateKey = format(date, "yyyy-MM-dd");
+    const availability = turf.availability?.[dateKey]?.[time];
+    return (
+      availability || {
+        available: Math.random() > 0.3,
+        price: turf.price + Math.floor(Math.random() * 200),
+      }
+    );
+  };
 
   const calculatePrice = () => {
     if (!selectedTime || !selectedDuration) return 0;
-    const basePrice = timeSlots[selectedTime]?.price || turf.price;
+    const basePrice =
+      getTimeSlotAvailability(selectedDate, selectedTime).price || turf.price;
     return basePrice * Number.parseInt(selectedDuration);
   };
 
+  const handleBooking = async () => {
+    try {
+      const userId = "mockUserId"; // Replace with real userId logic
+      const res = await axios.post("http://localhost:5000/api/bookings", {
+        userId,
+        turf: turf.name,
+        sport: turf.sports[0],
+        date: selectedDate,
+        timeSlot: selectedTime,
+      });
+      alert("Booking successful!");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Booking failed");
+    }
+  };
+
+  const getPeriodIcon = (period: string) => {
+    switch (period) {
+      case "morning":
+        return <Sun className="w-4 h-4 text-yellow-400" />;
+      case "afternoon":
+        return <Sun className="w-4 h-4 text-orange-400" />;
+      case "evening":
+        return <Sun className="w-4 h-4 text-orange-600" />;
+      case "night":
+        return <Moon className="w-4 h-4 text-blue-400" />;
+      default:
+        return <Clock className="w-4 h-4" />;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-900">
-      {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-900 sticky top-0 z-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      {/* Enhanced Header */}
+      <header className="border-b border-gray-700 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link
               href="/turfs"
-              className="flex items-center space-x-2 text-gray-400 hover:text-white"
+              className="flex items-center space-x-2 text-gray-400 hover:text-emerald-400 transition-colors duration-200"
             >
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Turfs</span>
             </Link>
             <div className="flex items-center space-x-3">
-              <Button
-                variant="outline"
-                size="icon"
-                className="bg-gray-800 border-gray-700 text-white"
-              >
-                <Heart className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="bg-gray-800 border-gray-700 text-white"
-              >
-                <Share2 className="w-4 h-4" />
-              </Button>
+              {user ? (
+                <>
+                  <Button
+                    className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg"
+                    onClick={() =>
+                      router.push(
+                        user.userType === "admin"
+                          ? "/admin-dashboard"
+                          : "/player-dashboard"
+                      )
+                    }
+                  >
+                    {user.firstName}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleLogout}
+                    className="text-gray-300 hover:text-white hover:bg-gray-800"
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="bg-gray-800/50 border-gray-600 text-white hover:bg-red-600 hover:border-red-600 transition-all duration-200"
+                  >
+                    <Heart className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="bg-gray-800/50 border-gray-600 text-white hover:bg-blue-600 hover:border-blue-600 transition-all duration-200"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -177,153 +320,153 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
       <div className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Image Gallery */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 md:col-span-1">
-                <Image
-                  src={turf.images[0] || "/placeholder.svg"}
-                  alt={turf.name}
-                  width={600}
-                  height={400}
-                  className="w-full h-64 md:h-80 object-cover rounded-lg"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                {turf.images.slice(1, 4).map((image, index) => (
-                  <Image
-                    key={index}
-                    src={image || "/placeholder.svg"}
-                    alt={`${turf.name} ${index + 2}`}
-                    width={300}
-                    height={200}
-                    className="w-full h-24 md:h-36 object-cover rounded-lg"
-                  />
-                ))}
-                {turf.images.length > 4 && (
-                  <div className="relative">
+          <div className="lg:col-span-2 space-y-8">
+            {/* Enhanced Image Gallery */}
+            <div className="relative">
+              <div className="grid grid-cols-4 gap-3 h-96">
+                <div className="col-span-2 row-span-2">
+                  <div className="relative h-full rounded-xl overflow-hidden group">
                     <Image
-                      src={turf.images[4] || "/placeholder.svg"}
-                      alt="More images"
-                      width={300}
-                      height={200}
-                      className="w-full h-24 md:h-36 object-cover rounded-lg"
+                      src={images[0] || "/placeholder.svg"}
+                      alt={turf.name}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
                     />
-                    <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                      <span className="text-white font-semibold">
-                        +{turf.images.length - 4} more
-                      </span>
-                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   </div>
-                )}
+                </div>
+                {images.slice(1, 5).map((image: string, index: number) => (
+                  <div
+                    key={index}
+                    className="relative rounded-lg overflow-hidden group"
+                  >
+                    <Image
+                      src={image || "/placeholder.svg"}
+                      alt={`${turf.name} ${index + 2}`}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {index === 3 && images.length > 5 && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <span className="text-white font-semibold text-lg">
+                          +{images.length - 4} more
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Turf Info */}
-            <Card className="bg-gray-800 border-gray-700">
-              <CardHeader>
+            {/* Enhanced Turf Info */}
+            <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700 shadow-2xl">
+              <CardHeader className="pb-4">
                 <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-2xl text-white">
+                  <div className="space-y-2">
+                    <CardTitle className="text-3xl font-bold text-white">
                       {turf.name}
                     </CardTitle>
-                    <CardDescription className="flex items-center mt-2 text-gray-300">
-                      <MapPin className="w-4 h-4 mr-1" />
+                    <CardDescription className="flex items-center text-gray-300 text-lg">
+                      <MapPin className="w-5 h-5 mr-2 text-emerald-400" />
                       {turf.location}
                     </CardDescription>
                   </div>
-                  <div className="flex items-center">
-                    <Star className="w-5 h-5 text-yellow-400 fill-current" />
-                    <span className="text-lg font-semibold ml-1 text-white">
+                  <div className="flex items-center bg-gray-700/50 px-4 py-2 rounded-full">
+                    <Star className="w-6 h-6 text-yellow-400 fill-current" />
+                    <span className="text-xl font-bold ml-2 text-white">
                       {turf.rating}
                     </span>
-                    <span className="text-sm text-gray-400 ml-1">
+                    <span className="text-sm text-gray-400 ml-2">
                       ({turf.reviews} reviews)
                     </span>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    {turf.sports.map((sport) => (
-                      <Badge
-                        key={sport}
-                        variant="secondary"
-                        className="bg-green-600 text-white"
-                      >
-                        {sport}
-                      </Badge>
-                    ))}
-                  </div>
-                  <p className="text-gray-300">{turf.description}</p>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-3xl font-bold text-green-400">
-                        ₹{turf.price}
-                      </span>
-                      {turf.originalPrice > turf.price && (
-                        <span className="text-lg text-gray-500 line-through">
-                          ₹{turf.originalPrice}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-gray-400">per hour</span>
+              <CardContent className="space-y-6">
+                <div className="flex flex-wrap gap-2">
+                  {turf.sports.map((sport: string) => (
+                    <Badge
+                      key={sport}
+                      variant="secondary"
+                      className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-2 text-sm font-medium"
+                    >
+                      {sport}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-gray-300 text-lg leading-relaxed">
+                  {turf.description}
+                </p>
+                <div className="flex items-center gap-6 p-4 bg-gray-700/30 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="text-4xl font-bold text-emerald-400">
+                      ₹{turf.price}
+                    </span>
                     {turf.originalPrice > turf.price && (
-                      <Badge className="bg-red-600">
-                        {Math.round(
-                          ((turf.originalPrice - turf.price) /
-                            turf.originalPrice) *
-                            100
-                        )}
-                        % OFF
-                      </Badge>
+                      <span className="text-xl text-gray-500 line-through">
+                        ₹{turf.originalPrice}
+                      </span>
                     )}
                   </div>
+                  <span className="text-gray-400 text-lg">per hour</span>
+                  {turf.originalPrice > turf.price && (
+                    <Badge className="bg-gradient-to-r from-red-600 to-red-700 text-white">
+                      {Math.round(
+                        ((turf.originalPrice - turf.price) /
+                          turf.originalPrice) *
+                          100
+                      )}
+                      % OFF
+                    </Badge>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Tabs */}
-            <Tabs defaultValue="amenities" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-4 bg-gray-800">
+            {/* Enhanced Tabs */}
+            <Tabs defaultValue="amenities" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-4 bg-gray-800/50 backdrop-blur-sm p-1 rounded-xl">
                 <TabsTrigger
                   value="amenities"
-                  className="text-white data-[state=active]:bg-green-600"
+                  className="text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-emerald-700 data-[state=active]:text-white rounded-lg transition-all duration-200"
                 >
                   Amenities
                 </TabsTrigger>
                 <TabsTrigger
                   value="rules"
-                  className="text-white data-[state=active]:bg-green-600"
+                  className="text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-emerald-700 data-[state=active]:text-white rounded-lg transition-all duration-200"
                 >
                   Rules
                 </TabsTrigger>
                 <TabsTrigger
                   value="location"
-                  className="text-white data-[state=active]:bg-green-600"
+                  className="text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-emerald-700 data-[state=active]:text-white rounded-lg transition-all duration-200"
                 >
                   Location
                 </TabsTrigger>
                 <TabsTrigger
                   value="reviews"
-                  className="text-white data-[state=active]:bg-green-600"
+                  className="text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-emerald-700 data-[state=active]:text-white rounded-lg transition-all duration-200"
                 >
                   Reviews
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="amenities">
-                <Card className="bg-gray-800 border-gray-700">
+                <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700">
                   <CardContent className="pt-6">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {turf.amenities.map((amenity) => (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {turf.amenities.map((amenity: Amenity, index: number) => (
                         <div
-                          key={amenity.name}
-                          className="flex items-center space-x-3"
+                          key={index}
+                          className="flex items-center space-x-3 p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition-colors duration-200"
                         >
-                          <amenity.icon className="w-5 h-5 text-green-400" />
-                          <span className="text-gray-300">{amenity.name}</span>
+                          {amenity.icon && (
+                            <amenity.icon className="w-6 h-6 text-emerald-400" />
+                          )}
+                          <span className="text-gray-300 font-medium">
+                            {amenity.name}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -332,12 +475,15 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
               </TabsContent>
 
               <TabsContent value="rules">
-                <Card className="bg-gray-800 border-gray-700">
+                <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700">
                   <CardContent className="pt-6">
-                    <ul className="space-y-2">
-                      {turf.rules.map((rule, index) => (
-                        <li key={index} className="flex items-start space-x-2">
-                          <span className="text-green-400 mt-1">•</span>
+                    <ul className="space-y-3">
+                      {turf.rules.map((rule: string, index: number) => (
+                        <li
+                          key={index}
+                          className="flex items-start space-x-3 p-3 bg-gray-700/20 rounded-lg"
+                        >
+                          <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
                           <span className="text-gray-300">{rule}</span>
                         </li>
                       ))}
@@ -347,19 +493,25 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
               </TabsContent>
 
               <TabsContent value="location">
-                <Card className="bg-gray-800 border-gray-700">
+                <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700">
                   <CardContent className="pt-6">
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-semibold text-white mb-2">
+                    <div className="space-y-6">
+                      <div className="p-4 bg-gray-700/30 rounded-xl">
+                        <h4 className="font-semibold text-white mb-3 flex items-center">
+                          <MapIcon className="w-5 h-5 mr-2 text-emerald-400" />
                           Address
                         </h4>
-                        <p className="text-gray-300">{turf.fullAddress}</p>
+                        <p className="text-gray-300 text-lg">
+                          {turf.fullAddress}
+                        </p>
                       </div>
-                      <div className="h-64 bg-gray-700 rounded-lg flex items-center justify-center">
-                        <span className="text-gray-400">
-                          Map integration would go here
-                        </span>
+                      <div className="h-64 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-600">
+                        <div className="text-center">
+                          <MapIcon className="w-12 h-12 text-gray-500 mx-auto mb-2" />
+                          <span className="text-gray-400">
+                            Interactive map would be displayed here
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -367,21 +519,21 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
               </TabsContent>
 
               <TabsContent value="reviews">
-                <Card className="bg-gray-800 border-gray-700">
+                <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700">
                   <CardContent className="pt-6">
                     <div className="space-y-6">
                       {reviews.map((review) => (
                         <div
                           key={review.id}
-                          className="border-b border-gray-700 pb-4 last:border-b-0"
+                          className="border-b border-gray-700 pb-6 last:border-b-0 p-4 bg-gray-700/20 rounded-lg hover:bg-gray-700/30 transition-colors duration-200"
                         >
                           <div className="flex items-start space-x-4">
-                            <Avatar>
+                            <Avatar className="w-12 h-12">
                               <AvatarImage
                                 src={review.avatar || "/placeholder.svg"}
                                 alt={review.user}
                               />
-                              <AvatarFallback className="bg-gray-700 text-white">
+                              <AvatarFallback className="bg-emerald-600 text-white">
                                 {review.user
                                   .split(" ")
                                   .map((n) => n[0])
@@ -390,18 +542,18 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
                             </Avatar>
                             <div className="flex-1">
                               <div className="flex items-center justify-between mb-2">
-                                <h5 className="font-semibold text-white">
+                                <h5 className="font-semibold text-white text-lg">
                                   {review.user}
                                 </h5>
                                 <span className="text-sm text-gray-400">
                                   {review.date}
                                 </span>
                               </div>
-                              <div className="flex items-center mb-2">
+                              <div className="flex items-center mb-3">
                                 {[...Array(5)].map((_, i) => (
                                   <Star
                                     key={i}
-                                    className={`w-4 h-4 ${
+                                    className={`w-5 h-5 ${
                                       i < review.rating
                                         ? "text-yellow-400 fill-current"
                                         : "text-gray-600"
@@ -409,7 +561,9 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
                                   />
                                 ))}
                               </div>
-                              <p className="text-gray-300">{review.comment}</p>
+                              <p className="text-gray-300 leading-relaxed">
+                                {review.comment}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -421,77 +575,144 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
             </Tabs>
           </div>
 
-          {/* Booking Sidebar */}
+          {/* Enhanced Booking Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="bg-gray-800 border-gray-700 sticky top-24">
+            <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700 sticky top-24 shadow-2xl">
               <CardHeader>
-                <CardTitle className="text-white">Book This Turf</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Select date and time for your booking
+                <CardTitle className="text-white text-xl flex items-center">
+                  <CalendarIcon className="w-6 h-6 mr-2 text-emerald-400" />
+                  Book This Turf
+                </CardTitle>
+                <CardDescription className="text-gray-400 text-base">
+                  Select your preferred date and time
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-300 mb-2 block">
-                    Select Date
-                  </label>
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    className="rounded-md border border-gray-700 bg-gray-800"
-                    disabled={(date) => date < new Date()}
-                  />
+              <CardContent className="space-y-6">
+                {/* Weekly Time Slot View */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">
+                      Weekly Schedule
+                    </h3>
+                    <div className="flex space-x-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setCurrentWeek(addDays(currentWeek, -7))}
+                        className="text-gray-300 hover:text-white"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setCurrentWeek(addDays(currentWeek, 7))}
+                        className="text-gray-300 hover:text-white"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1 text-xs">
+                    {weekDays.map((day) => (
+                      <div
+                        key={day.toISOString()}
+                        className={`p-2 text-center rounded-lg cursor-pointer transition-all duration-200 ${
+                          isSameDay(day, selectedDate)
+                            ? "bg-emerald-600 text-white"
+                            : isToday(day)
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-700/50 text-gray-300 hover:bg-gray-600"
+                        }`}
+                        onClick={() => setSelectedDate(day)}
+                      >
+                        <div className="font-medium">{format(day, "EEE")}</div>
+                        <div className="text-xs">{format(day, "d")}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Time Slots for Selected Date */}
+                  <div className="space-y-3">
+                    <h4 className="text-white font-medium">
+                      Available Times - {format(selectedDate, "MMM d, yyyy")}
+                    </h4>
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {["morning", "afternoon", "evening", "night"].map(
+                        (period) => {
+                          const periodSlots = timeSlots.filter(
+                            (slot) => slot.period === period
+                          );
+                          return (
+                            <div key={period} className="space-y-2">
+                              <div className="flex items-center text-sm text-gray-400 font-medium">
+                                {getPeriodIcon(period)}
+                                <span className="ml-2 capitalize">
+                                  {period}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                {periodSlots.map((slot) => {
+                                  const availability = getTimeSlotAvailability(
+                                    selectedDate,
+                                    slot.time
+                                  );
+                                  return (
+                                    <Button
+                                      key={slot.time}
+                                      variant={
+                                        selectedTime === slot.time
+                                          ? "default"
+                                          : "outline"
+                                      }
+                                      size="sm"
+                                      disabled={!availability.available}
+                                      onClick={() => setSelectedTime(slot.time)}
+                                      className={`text-xs ${
+                                        availability.available
+                                          ? selectedTime === slot.time
+                                            ? "bg-emerald-600 text-white border-emerald-600"
+                                            : "bg-gray-700/50 border-gray-600 text-white hover:bg-gray-600 hover:border-gray-500"
+                                          : "bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed opacity-50"
+                                      }`}
+                                    >
+                                      <div className="text-center w-full">
+                                        <div>{slot.label}</div>
+                                        <div className="text-xs text-gray-300">
+                                          ₹{availability.price}
+                                        </div>
+                                      </div>
+                                      {!availability.available && (
+                                        <XCircle className="w-3 h-3 ml-1" />
+                                      )}
+                                      {availability.available &&
+                                        selectedTime === slot.time && (
+                                          <CheckCircle className="w-3 h-3 ml-1" />
+                                        )}
+                                    </Button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        }
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {selectedDate && (
+                {selectedDate && selectedTime && (
                   <>
                     <div>
-                      <label className="text-sm font-medium text-gray-300 mb-2 block">
-                        Available Time Slots
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {Object.entries(timeSlots).map(([time, slot]) => (
-                          <Button
-                            key={time}
-                            variant={
-                              selectedTime === time ? "default" : "outline"
-                            }
-                            size="sm"
-                            disabled={!slot.available}
-                            onClick={() => setSelectedTime(time)}
-                            className={`${
-                              slot.available
-                                ? selectedTime === time
-                                  ? "bg-green-600 text-white"
-                                  : "bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
-                                : "bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed"
-                            }`}
-                          >
-                            <div className="text-center">
-                              <div className="text-xs">{time}</div>
-                              <div className="text-xs">₹{slot.price}</div>
-                            </div>
-                            {!slot.available && (
-                              <XCircle className="w-3 h-3 ml-1" />
-                            )}
-                            {slot.available && selectedTime === time && (
-                              <CheckCircle className="w-3 h-3 ml-1" />
-                            )}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-gray-300 mb-2 block">
+                      <label className="text-sm font-medium text-gray-300 mb-3 block">
                         Duration
                       </label>
                       <Select
                         value={selectedDuration}
                         onValueChange={setSelectedDuration}
                       >
-                        <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                        <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-gray-700 border-gray-600">
@@ -504,50 +725,138 @@ export default function TurfDetailPage({ params }: { params: { id: string } }) {
                           <SelectItem value="3" className="text-white">
                             3 hours
                           </SelectItem>
+                          <SelectItem value="4" className="text-white">
+                            4 hours
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {selectedTime && (
-                      <div className="border-t border-gray-700 pt-4">
-                        <div className="space-y-2 text-sm">
+                    {/* Enhanced Booking Summary */}
+                    <div className="border border-gray-600 rounded-xl p-4 bg-gray-700/20 backdrop-blur-sm">
+                      <h4 className="font-semibold text-white mb-3 flex items-center">
+                        <CheckCircle className="w-5 h-5 mr-2 text-emerald-400" />
+                        Booking Summary
+                      </h4>
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between items-center p-2 bg-gray-800/50 rounded-lg">
+                          <span className="text-gray-300">Date</span>
+                          <span className="text-white font-medium">
+                            {format(selectedDate, "MMM d, yyyy")}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-gray-800/50 rounded-lg">
+                          <span className="text-gray-300">Time</span>
+                          <span className="text-white font-medium">
+                            {
+                              timeSlots.find(
+                                (slot) => slot.time === selectedTime
+                              )?.label
+                            }
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center p-2 bg-gray-800/50 rounded-lg">
+                          <span className="text-gray-300">Duration</span>
+                          <span className="text-white font-medium">
+                            {selectedDuration}h
+                          </span>
+                        </div>
+                        <div className="border-t border-gray-600 pt-3 space-y-2">
                           <div className="flex justify-between text-gray-300">
                             <span>Base price ({selectedDuration}h)</span>
                             <span>₹{calculatePrice()}</span>
                           </div>
                           <div className="flex justify-between text-gray-300">
-                            <span>Service fee</span>
+                            <span>Platform fee</span>
                             <span>₹50</span>
                           </div>
-                          <div className="flex justify-between font-semibold text-lg text-white border-t border-gray-700 pt-2">
-                            <span>Total</span>
-                            <span>₹{calculatePrice() + 50}</span>
+                          <div className="flex justify-between text-gray-300">
+                            <span>GST (18%)</span>
+                            <span>
+                              ₹{Math.round((calculatePrice() + 50) * 0.18)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between font-bold text-lg text-white border-t border-gray-600 pt-2">
+                            <span>Total Amount</span>
+                            <span className="text-emerald-400">
+                              ₹{Math.round((calculatePrice() + 50) * 1.18)}
+                            </span>
                           </div>
                         </div>
-                        <Button className="w-full mt-4" size="lg">
-                          Book Now - ₹{calculatePrice() + 50}
+                        <Button
+                          className="w-full mt-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-semibold py-3 text-lg shadow-lg"
+                          onClick={handleBooking}
+                        >
+                          Book Now - ₹
+                          {Math.round((calculatePrice() + 50) * 1.18)}
                         </Button>
                       </div>
-                    )}
+                    </div>
                   </>
                 )}
 
-                <div className="border-t border-gray-700 pt-4">
-                  <h4 className="font-semibold text-white mb-2">
+                {/* Enhanced Contact Owner Section */}
+                <div className="border-t border-gray-600 pt-6">
+                  <h4 className="font-semibold text-white mb-4 flex items-center">
+                    <Phone className="w-5 h-5 mr-2 text-emerald-400" />
                     Contact Owner
                   </h4>
-                  <div className="space-y-2 text-sm text-gray-300">
-                    <div className="flex items-center space-x-2">
-                      <Phone className="w-4 h-4" />
-                      <span>{turf.owner.phone}</span>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center">
+                          <span className="text-white font-semibold">
+                            {owner.name.charAt(0)}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-white font-medium">{owner.name}</p>
+                          <p className="text-xs text-gray-400">
+                            {owner.responseTime}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Mail className="w-4 h-4" />
-                      <span>{turf.owner.email}</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-gray-700/50 border-gray-600 text-white hover:bg-green-700 hover:border-green-600"
+                      >
+                        <Phone className="w-4 h-4 mr-2" />
+                        Call
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-gray-700/50 border-gray-600 text-white hover:bg-blue-700 hover:border-blue-600"
+                      >
+                        <Mail className="w-4 h-4 mr-2" />
+                        Email
+                      </Button>
                     </div>
-                    <p className="text-xs text-gray-400">
-                      {turf.owner.responseTime}
-                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-3 gap-3 p-4 bg-gray-700/20 rounded-xl">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-emerald-400">
+                      {turf.rating}
+                    </div>
+                    <div className="text-xs text-gray-400">Rating</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-400">
+                      {turf.reviews}
+                    </div>
+                    <div className="text-xs text-gray-400">Reviews</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-400">
+                      24/7
+                    </div>
+                    <div className="text-xs text-gray-400">Available</div>
                   </div>
                 </div>
               </CardContent>

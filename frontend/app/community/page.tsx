@@ -33,12 +33,17 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import axios from "axios";
+import { useUser } from "@/contexts/UserContext";
+import { useRouter } from "next/navigation";
 
 export default function CommunityPage() {
   const [activeTab, setActiveTab] = useState("find-players");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSport, setSelectedSport] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
+  const { user, setUser } = useUser();
+  const router = useRouter();
 
   const players = [
     {
@@ -186,6 +191,39 @@ export default function CommunityPage() {
     return matchesSearch && matchesSport && matchesLocation;
   });
 
+  // Example: Create post
+  const handleCreatePost = async (content: string) => {
+    try {
+      const userId = localStorage.getItem("userId") || "mockUserId";
+      const res = await axios.post("http://localhost:5000/api/community", {
+        userId,
+        content,
+      });
+      alert("Post created!");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Post failed");
+    }
+  };
+
+  // Example: Add comment
+  const handleAddComment = async (postId: string, text: string) => {
+    try {
+      const userId = localStorage.getItem("userId") || "mockUserId";
+      const res = await axios.post(
+        `http://localhost:5000/api/community/${postId}/comment`,
+        { userId, text }
+      );
+      alert("Comment added!");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Comment failed");
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    router.push("/");
+  };
+
   return (
     <div className="min-h-screen bg-slate-950">
       {/* Header */}
@@ -213,16 +251,45 @@ export default function CommunityPage() {
               </Link>
             </nav>
             <div className="flex items-center space-x-3">
-              <Button
-                variant="ghost"
-                asChild
-                className="text-slate-400 hover:text-white"
-              >
-                <Link href="/login">Login</Link>
-              </Button>
-              <Button asChild className="bg-emerald-600 hover:bg-emerald-700">
-                <Link href="/signup">Sign Up</Link>
-              </Button>
+              {user ? (
+                <>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() =>
+                      router.push(
+                        user.userType === "admin"
+                          ? "/admin-dashboard"
+                          : "/player-dashboard"
+                      )
+                    }
+                  >
+                    {user.firstName}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleLogout}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    asChild
+                    className="text-slate-400 hover:text-white"
+                  >
+                    <Link href="/login">Login</Link>
+                  </Button>
+                  <Button
+                    asChild
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    <Link href="/signup">Sign Up</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

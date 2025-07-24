@@ -1,7 +1,5 @@
 "use client";
 
-import type React from "react";
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,10 +32,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import axios from "axios";
+import { useRouter } from "next/navigation";
+import { useUser } from "@/contexts/UserContext";
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -49,26 +52,93 @@ export default function SignupPage() {
     userType: "",
     agreeToTerms: false,
   });
-  const [isLoading, setIsLoading] = useState(false);
+
+  const router = useRouter();
+  const { setUser } = useUser();
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (error) setError("");
+  };
+
+  const validateForm = () => {
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return false;
+    }
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return false;
+    }
+    if (!formData.agreeToTerms) {
+      setError("Please agree to the terms and conditions");
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
     setIsLoading(true);
-    // Simulate signup
-    setTimeout(() => {
+    setError("");
+
+    try {
+      console.log("Submitting form data:", formData);
+
+      const res = await axios.post("/api/auth/signup", {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        location: formData.location,
+        userType: formData.userType,
+      });
+
+      console.log("Signup successful:", res.data);
+
+      // Set user context
+      if (res.data.user) {
+        setUser({
+          id: res.data.user.id,
+          email: res.data.user.email,
+          firstName: res.data.user.firstName,
+          lastName: res.data.user.lastName,
+          userType: res.data.user.userType,
+        });
+      }
+
+      // Multiple redirect strategies for better compatibility
+      try {
+        // Method 1: Next.js router push
+        await router.push("/");
+      } catch (routerError) {
+        console.error("Router push failed:", routerError);
+
+        // Method 2: Window location redirect as fallback
+        window.location.href = "/";
+      }
+    } catch (err: any) {
+      console.error("Signup error:", err);
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Signup failed. Please try again.";
+      setError(errorMessage);
+    } finally {
       setIsLoading(false);
-      // Redirect to dashboard or verification page
-    }, 2000);
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Back to Home */}
         <Link
           href="/"
           className="inline-flex items-center text-slate-400 hover:text-white mb-8 transition-colors"
@@ -92,8 +162,16 @@ export default function SignupPage() {
               Join thousands of sports enthusiasts
             </CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-4">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-md p-3">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Name */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName" className="text-slate-300">
@@ -103,14 +181,13 @@ export default function SignupPage() {
                     <User className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                     <Input
                       id="firstName"
-                      type="text"
-                      placeholder="John"
                       value={formData.firstName}
                       onChange={(e) =>
                         handleInputChange("firstName", e.target.value)
                       }
-                      className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
+                      placeholder="John"
                       required
+                      className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                     />
                   </div>
                 </div>
@@ -121,18 +198,18 @@ export default function SignupPage() {
                   </Label>
                   <Input
                     id="lastName"
-                    type="text"
-                    placeholder="Doe"
                     value={formData.lastName}
                     onChange={(e) =>
                       handleInputChange("lastName", e.target.value)
                     }
-                    className="bg-slate-800 border-slate-700 text-white placeholder-slate-400"
+                    placeholder="Doe"
                     required
+                    className="bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                   />
                 </div>
               </div>
 
+              {/* Email */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-slate-300">
                   Email
@@ -142,15 +219,16 @@ export default function SignupPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="john@example.com"
                     value={formData.email}
                     onChange={(e) => handleInputChange("email", e.target.value)}
-                    className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
+                    placeholder="john@example.com"
                     required
+                    className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                   />
                 </div>
               </div>
 
+              {/* Phone */}
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-slate-300">
                   Phone Number
@@ -160,15 +238,16 @@ export default function SignupPage() {
                   <Input
                     id="phone"
                     type="tel"
-                    placeholder="+91 98765 43210"
                     value={formData.phone}
                     onChange={(e) => handleInputChange("phone", e.target.value)}
-                    className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
+                    placeholder="+91 98765 43210"
                     required
+                    className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                   />
                 </div>
               </div>
 
+              {/* Location */}
               <div className="space-y-2">
                 <Label htmlFor="location" className="text-slate-300">
                   Location
@@ -177,18 +256,18 @@ export default function SignupPage() {
                   <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <Input
                     id="location"
-                    type="text"
-                    placeholder="Mumbai, India"
                     value={formData.location}
                     onChange={(e) =>
                       handleInputChange("location", e.target.value)
                     }
-                    className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
+                    placeholder="Mumbai, India"
                     required
+                    className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                   />
                 </div>
               </div>
 
+              {/* User Type */}
               <div className="space-y-2">
                 <Label htmlFor="userType" className="text-slate-300">
                   I am a
@@ -206,10 +285,14 @@ export default function SignupPage() {
                     <SelectItem value="player" className="text-white">
                       Player
                     </SelectItem>
+                    <SelectItem value="admin" className="text-white">
+                      Admin
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
+              {/* Password */}
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-slate-300">
                   Password
@@ -219,13 +302,13 @@ export default function SignupPage() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Create a strong password"
                     value={formData.password}
                     onChange={(e) =>
                       handleInputChange("password", e.target.value)
                     }
-                    className="pl-10 pr-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
+                    placeholder="Create a strong password"
                     required
+                    className="pl-10 pr-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                   />
                   <button
                     type="button"
@@ -241,6 +324,7 @@ export default function SignupPage() {
                 </div>
               </div>
 
+              {/* Confirm Password */}
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword" className="text-slate-300">
                   Confirm Password
@@ -250,13 +334,13 @@ export default function SignupPage() {
                   <Input
                     id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
-                    placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={(e) =>
                       handleInputChange("confirmPassword", e.target.value)
                     }
-                    className="pl-10 pr-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
+                    placeholder="Confirm your password"
                     required
+                    className="pl-10 pr-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                   />
                   <button
                     type="button"
@@ -272,6 +356,7 @@ export default function SignupPage() {
                 </div>
               </div>
 
+              {/* Terms */}
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="terms"
@@ -299,6 +384,7 @@ export default function SignupPage() {
                 </Label>
               </div>
 
+              {/* Submit Button */}
               <Button
                 type="submit"
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
@@ -352,7 +438,7 @@ export default function SignupPage() {
               Already have an account?{" "}
               <Link
                 href="/login"
-                className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="text-emerald-400 hover:text-emerald-300"
               >
                 Sign in
               </Link>
