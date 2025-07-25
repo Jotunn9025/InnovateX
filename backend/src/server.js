@@ -53,7 +53,7 @@ io.on('connection', (socket) => {
         const dummyQR = 'QR123456789'; // Dummy QR code string
         await client.messages.create({
           from: 'whatsapp:+14155238886',
-          to: 'whatsapp:+917021420883',
+          to: 'whatsapp:+919082331229',
           body: `Hi, your booking for ${booking.turf} on ${booking.date.toISOString().slice(0,10)} at ${booking.timeSlot} has been approved!\nYour QR code: ${dummyQR}`
         });
       } catch (twilioErr) {

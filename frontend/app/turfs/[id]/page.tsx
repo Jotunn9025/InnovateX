@@ -71,6 +71,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 interface Amenity {
   name: string;
@@ -141,6 +143,8 @@ export default function TurfDetailPage({
   const [upiId, setUpiId] = useState("");
   const [isPaying, setIsPaying] = useState(false);
   const [userBookings, setUserBookings] = useState<any[]>([]);
+  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
+  const [stripeAmount, setStripeAmount] = useState<number>(0);
 
   const unwrappedParams = React.use(params);
   const turfId = unwrappedParams.id;
@@ -308,30 +312,37 @@ export default function TurfDetailPage({
   };
 
   const handleBooking = async () => {
+    // Call backend to create PaymentIntent
+    const userId = user?.id || "mockUserId";
+    const res = await axios.post("http://localhost:5000/api/bookings", {
+      userId,
+      turf: turf.name,
+      sport: turf.sports[0],
+      date: selectedDate,
+      timeSlot: selectedTime,
+    });
+    setStripeClientSecret(res.data.clientSecret);
+    setStripeAmount(res.data.amount);
     setShowPayment(true);
   };
 
-  const handleFakePayment = async () => {
-    setIsPaying(true);
-    setTimeout(async () => {
-      setIsPaying(false);
-      setShowPayment(false);
-      // Proceed with actual booking logic
-      try {
-        const userId = user?.id || "mockUserId";
-        const res = await axios.post("http://localhost:5000/api/bookings", {
-          userId,
-          turf: turf.name,
-          sport: turf.sports[0],
-          date: selectedDate,
-          timeSlot: selectedTime,
-        });
-        setLastBookingId(res.data.booking._id);
-        alert("Booking successful! Waiting for approval.");
-      } catch (err: any) {
-        alert(err.response?.data?.message || "Booking failed");
-      }
-    }, 1500);
+  const handleStripeSuccess = async () => {
+    setShowPayment(false);
+    // Now create the booking in backend (and trigger WhatsApp message)
+    try {
+      const userId = user?.id || "mockUserId";
+      const res = await axios.post("http://localhost:5000/api/bookings/confirm", {
+        userId,
+        turf: turf.name,
+        sport: turf.sports[0],
+        date: selectedDate,
+        timeSlot: selectedTime,
+      });
+      setLastBookingId(res.data.booking._id);
+      alert("Payment successful! Booking confirmed and WhatsApp message sent.");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Booking confirmation failed");
+    }
   };
 
   const getPeriodIcon = (period: string) => {
@@ -348,6 +359,36 @@ export default function TurfDetailPage({
         return <Clock className="w-4 h-4" />;
     }
   };
+
+  function StripeCheckout({ clientSecret, onSuccess }: { clientSecret: string, onSuccess: () => void }) {
+    const stripe = useStripe();
+    const elements = useElements();
+    const [loading, setLoading] = useState(false);
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!stripe || !elements) return;
+      setLoading(true);
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: elements.getElement(CardElement)!,
+        },
+      });
+      setLoading(false);
+      if (result.error) {
+        alert(result.error.message);
+      } else if (result.paymentIntent?.status === 'succeeded') {
+        onSuccess();
+      }
+    };
+    return (
+      <form onSubmit={handleSubmit}>
+        <CardElement />
+        <Button type="submit" disabled={loading}>{loading ? 'Processing...' : 'Pay'}</Button>
+      </form>
+    );
+  }
+
+  const stripePromise = loadStripe('pk_test_51RoRgOJTkGjQcsNFasPubDjRLT1Ryt1nyBxYyrSfhonCtaSkTILEqKbJkbb9uOJ7FCtbULWOtxyu4wxZ37DVOjBc00YsHvvOEH');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -1007,51 +1048,21 @@ export default function TurfDetailPage({
       <Dialog open={showPayment} onOpenChange={setShowPayment}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Fake Payment Gateway</DialogTitle>
+            <DialogTitle>Stripe Payment</DialogTitle>
             <DialogDescription>
               Complete your payment to book this turf.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <label className="block font-medium mb-1">
-                Select Payment Method
-              </label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full p-2 border rounded"
-              >
-                <option value="UPI">UPI</option>
-                <option value="Card">Card</option>
-                <option value="Netbanking">Netbanking</option>
-                <option value="Wallet">Wallet</option>
-              </select>
-            </div>
-            {paymentMethod === "UPI" && (
-              <div>
-                <label className="block font-medium mb-1">Enter UPI ID</label>
-                <input
-                  type="text"
-                  value={upiId}
-                  onChange={(e) => setUpiId(e.target.value)}
-                  placeholder="yourupi@bank"
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-            )}
             <div className="text-lg font-bold">
-              Amount to Pay: ₹{Math.round((calculatePrice() + 50) * 1.18)}
+              Amount to Pay: ₹{Math.round((stripeAmount + 50) * 1.18)}
             </div>
+            {stripeClientSecret && (
+              <Elements stripe={stripePromise} options={{ clientSecret: stripeClientSecret }}>
+                <StripeCheckout clientSecret={stripeClientSecret} onSuccess={handleStripeSuccess} />
+              </Elements>
+            )}
           </div>
-          <DialogFooter>
-            <Button
-              onClick={handleFakePayment}
-              disabled={isPaying || (paymentMethod === "UPI" && !upiId)}
-            >
-              {isPaying ? "Processing..." : "Pay"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

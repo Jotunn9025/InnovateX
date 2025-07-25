@@ -21,4 +21,6 @@ router.put("/:id/approve", bookingController.approveBooking);
 // Reject a booking
 router.put("/:id/reject", bookingController.rejectBooking);
 
+router.post('/confirm', bookingController.confirmBooking);
+
 module.exports = router;

@@ -3,6 +3,8 @@ const User = require("../models/User");
 const Turf = require("../models/Turf");
 const QRCode = require("qrcode");
 const twilio = require("twilio");
+const Stripe = require('stripe');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 // const nodemailer = require('nodemailer'); // Uncomment and configure for real use
 
 function getSlotPrice(turf, date, timeSlot) {
@@ -16,6 +18,98 @@ function getSlotPrice(turf, date, timeSlot) {
 }
 
 exports.createBooking = async (req, res) => {
+  try {
+    const { userId, turf: turfName, sport, date, timeSlot } = req.body;
+    if (!userId || !turfName || !sport || !date || !timeSlot) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+    // Find turf by name
+    const turf = await Turf.findOne({ name: turfName });
+    if (!turf) return res.status(404).json({ message: "Turf not found" });
+    // Check and initialize availability for the date and timeSlot if missing
+    if (!turf.availability) turf.availability = {};
+    const dateStr = new Date(date).toISOString().slice(0, 10);
+    if (!turf.availability[dateStr]) turf.availability[dateStr] = {};
+    // Only block slot if already approved for another booking
+    if (
+      turf.availability[dateStr][timeSlot] &&
+      turf.availability[dateStr][timeSlot].available === false
+    ) {
+      return res.status(400).json({ message: "Slot not available" });
+    }
+    // Check for any existing non-rejected/cancelled booking for this slot
+    const existing = await Booking.findOne({
+      turf: turfName,
+      date: new Date(date),
+      timeSlot,
+      status: { $in: ["waiting for approval", "approved", "booked"] },
+    });
+    let bookingStatus = "waiting for approval";
+    if (existing) {
+      bookingStatus = "waitlist";
+    }
+    // Determine price for this slot
+    const slotPrice = getSlotPrice(turf, date, timeSlot);
+    // Create Stripe PaymentIntent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(slotPrice * 100), // amount in paise
+      currency: 'inr',
+      metadata: { userId, turf: turfName, sport, date, timeSlot },
+    });
+    // Respond with client_secret for frontend to complete payment
+    return res.status(200).json({ clientSecret: paymentIntent.client_secret, amount: slotPrice });
+    // Create booking
+    const booking = new Booking({
+      user: userId,
+      turf: turfName,
+      sport,
+      date,
+      timeSlot,
+      status: bookingStatus,
+      price: slotPrice,
+    });
+    const qrData = `${booking._id}|${userId}|${turfName}|${sport}|${date}|${timeSlot}`;
+    booking.qrCode = await QRCode.toDataURL(qrData);
+    await booking.save();
+    // Send WhatsApp message to user (booking request)
+    try {
+      const client = twilio(
+        process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN
+      );
+      await client.messages.create({
+        from: "whatsapp:+14155238886",
+        to: "whatsapp:+919082331229",
+        body: `Hi, your booking request for ${turfName} on ${dateStr} at ${timeSlot} has been received and is pending approval.`,
+      });
+    } catch (twilioErr) {
+      /* Optionally log Twilio error */
+    }
+    // Real-time notification to turf owner
+    const io = req.app.get("io");
+    const ownerSocketMap = req.app.get("ownerSocketMap");
+    const ownerEmail = turf.owner?.email;
+    if (ownerEmail && ownerSocketMap.has(ownerEmail)) {
+      io.to(ownerSocketMap.get(ownerEmail)).emit("new-booking", {
+        booking: {
+          _id: booking._id,
+          user: userId,
+          turf: turfName,
+          sport,
+          date,
+          timeSlot,
+          status: booking.status,
+          price: slotPrice,
+        },
+      });
+    }
+    res.status(201).json({ message: "Booking created", booking });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+exports.confirmBooking = async (req, res) => {
   try {
     const { userId, turf: turfName, sport, date, timeSlot } = req.body;
     if (!userId || !turfName || !sport || !date || !timeSlot) {
@@ -69,31 +163,13 @@ exports.createBooking = async (req, res) => {
       );
       await client.messages.create({
         from: "whatsapp:+14155238886",
-        to: "whatsapp:+917021420883",
+        to: "whatsapp:+919082331229",
         body: `Hi, your booking request for ${turfName} on ${dateStr} at ${timeSlot} has been received and is pending approval.`,
       });
     } catch (twilioErr) {
-      /* Optionally log Twilio error */
+      console.error('Twilio error:', twilioErr);
     }
-    // Real-time notification to turf owner
-    const io = req.app.get("io");
-    const ownerSocketMap = req.app.get("ownerSocketMap");
-    const ownerEmail = turf.owner?.email;
-    if (ownerEmail && ownerSocketMap.has(ownerEmail)) {
-      io.to(ownerSocketMap.get(ownerEmail)).emit("new-booking", {
-        booking: {
-          _id: booking._id,
-          user: userId,
-          turf: turfName,
-          sport,
-          date,
-          timeSlot,
-          status: booking.status,
-          price: slotPrice,
-        },
-      });
-    }
-    res.status(201).json({ message: "Booking created", booking });
+    res.status(201).json({ message: "Booking confirmed and WhatsApp sent", booking });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -151,7 +227,7 @@ exports.approveBooking = async (req, res) => {
       );
       await client.messages.create({
         from: "whatsapp:+14155238886",
-        to: "whatsapp:+917021420883",
+        to: "whatsapp:+919082331229",
         body: `Hi, your booking for ${booking.turf} on ${booking.date
           .toISOString()
           .slice(0, 10)} at ${
