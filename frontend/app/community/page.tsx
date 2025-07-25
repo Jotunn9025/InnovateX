@@ -224,6 +224,157 @@ export default function CommunityPage() {
     router.push("/");
   };
 
+  // Local state for teams/tournaments so we can add new ones
+  const [teamsState, setTeamsState] = useState(teams);
+  const [tournamentsState, setTournamentsState] = useState(tournaments);
+
+  // Team form state
+  const [teamForm, setTeamForm] = useState({
+    name: "",
+    sport: "",
+    level: "",
+    location: "",
+    maxMembers: "",
+    description: "",
+  });
+  const [teamFormSuccess, setTeamFormSuccess] = useState(false);
+
+  // Tournament form state
+  const [tournamentForm, setTournamentForm] = useState({
+    name: "",
+    sport: "",
+    location: "",
+    startDate: "",
+    endDate: "",
+    prize: "",
+    registrationFee: "",
+    maxTeams: "",
+    description: "",
+  });
+  const [tournamentFormSuccess, setTournamentFormSuccess] = useState(false);
+
+  // Modal state for player/team connect
+  const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
+  const [selectedTeam, setSelectedTeam] = useState<any | null>(null);
+  const [connectMessage, setConnectMessage] = useState("");
+  const [connectSuccess, setConnectSuccess] = useState(false);
+
+  // Handle team form input
+  const handleTeamFormChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    setTeamForm({ ...teamForm, [e.target.name]: e.target.value });
+  };
+
+  // Handle tournament form input
+  const handleTournamentFormChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    setTournamentForm({ ...tournamentForm, [e.target.name]: e.target.value });
+  };
+
+  // Handle create team
+  const handleCreateTeam = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      !teamForm.name ||
+      !teamForm.sport ||
+      !teamForm.level ||
+      !teamForm.location ||
+      !teamForm.maxMembers ||
+      !teamForm.description
+    ) {
+      setTeamFormSuccess(false);
+      return;
+    }
+    const newTeam = {
+      id: Date.now(),
+      name: teamForm.name,
+      sport: teamForm.sport,
+      members: 1,
+      maxMembers: parseInt(teamForm.maxMembers),
+      location: teamForm.location,
+      level: teamForm.level,
+      image:
+        "/placeholder.svg?height=60&width=60&text=" +
+        encodeURIComponent(teamForm.name),
+      description: teamForm.description,
+      nextMatch: "TBD",
+    };
+    setTeamsState([newTeam, ...teamsState]);
+    setTeamFormSuccess(true);
+    setTeamForm({
+      name: "",
+      sport: "",
+      level: "",
+      location: "",
+      maxMembers: "",
+      description: "",
+    });
+  };
+
+  // Handle create tournament
+  const handleCreateTournament = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      !tournamentForm.name ||
+      !tournamentForm.sport ||
+      !tournamentForm.location ||
+      !tournamentForm.startDate ||
+      !tournamentForm.endDate ||
+      !tournamentForm.prize ||
+      !tournamentForm.registrationFee ||
+      !tournamentForm.maxTeams ||
+      !tournamentForm.description
+    ) {
+      setTournamentFormSuccess(false);
+      return;
+    }
+    const newTournament = {
+      id: Date.now(),
+      name: tournamentForm.name,
+      sport: tournamentForm.sport,
+      date: `${tournamentForm.startDate} - ${tournamentForm.endDate}`,
+      location: tournamentForm.location,
+      prize: tournamentForm.prize,
+      teams: 0,
+      maxTeams: parseInt(tournamentForm.maxTeams),
+      registrationFee: tournamentForm.registrationFee,
+      image:
+        "/placeholder.svg?height=200&width=300&text=" +
+        encodeURIComponent(tournamentForm.name),
+      organizer: user ? user.firstName : "You",
+    };
+    setTournamentsState([newTournament, ...tournamentsState]);
+    setTournamentFormSuccess(true);
+    setTournamentForm({
+      name: "",
+      sport: "",
+      location: "",
+      startDate: "",
+      endDate: "",
+      prize: "",
+      registrationFee: "",
+      maxTeams: "",
+      description: "",
+    });
+  };
+
+  // Handle connect (simulate sending a message)
+  const handleSendConnect = () => {
+    setConnectSuccess(true);
+    setConnectMessage("");
+    setTimeout(() => {
+      setConnectSuccess(false);
+      setSelectedPlayer(null);
+      setSelectedTeam(null);
+    }, 1200);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950">
       {/* Header */}
@@ -471,7 +622,14 @@ export default function CommunityPage() {
                         <span>{player.availability}</span>
                       </div>
                       <div className="flex space-x-2">
-                        <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+                        <Button
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => {
+                            setSelectedPlayer(player);
+                            setConnectMessage("");
+                            setConnectSuccess(false);
+                          }}
+                        >
                           <UserPlus className="w-4 h-4 mr-2" />
                           Connect
                         </Button>
@@ -479,6 +637,11 @@ export default function CommunityPage() {
                           variant="outline"
                           size="icon"
                           className="border-slate-700 text-slate-300 hover:bg-slate-800 bg-transparent"
+                          onClick={() => {
+                            setSelectedPlayer(player);
+                            setConnectMessage("");
+                            setConnectSuccess(false);
+                          }}
                         >
                           <MessageCircle className="w-4 h-4" />
                         </Button>
@@ -492,7 +655,7 @@ export default function CommunityPage() {
 
           <TabsContent value="teams" className="space-y-6">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teams.map((team) => (
+              {teamsState.map((team) => (
                 <Card
                   key={team.id}
                   className="bg-slate-900 border-slate-800 hover:shadow-lg transition-shadow"
@@ -535,7 +698,14 @@ export default function CommunityPage() {
                         <Calendar className="w-4 h-4 mr-1" />
                         Next match: {team.nextMatch}
                       </div>
-                      <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
+                      <Button
+                        className="w-full bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => {
+                          setSelectedTeam(team);
+                          setConnectMessage("");
+                          setConnectSuccess(false);
+                        }}
+                      >
                         Join Team
                       </Button>
                     </div>
@@ -547,7 +717,7 @@ export default function CommunityPage() {
 
           <TabsContent value="tournaments" className="space-y-6">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tournaments.map((tournament) => (
+              {tournamentsState.map((tournament) => (
                 <Card
                   key={tournament.id}
                   className="bg-slate-900 border-slate-800 overflow-hidden hover:shadow-lg transition-shadow"
@@ -609,7 +779,8 @@ export default function CommunityPage() {
           </TabsContent>
 
           <TabsContent value="create" className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className="grid md:grid-cols-1 gap-8">
+              {/* Only Create Team Card */}
               <Card className="bg-slate-900 border-slate-800">
                 <CardHeader>
                   <CardTitle className="flex items-center text-white">
@@ -621,56 +792,105 @@ export default function CommunityPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <p className="text-sm text-slate-400">
-                      Build a competitive team, set practice schedules, and
-                      participate in tournaments together.
-                    </p>
-                    <ul className="text-sm text-slate-400 space-y-1">
-                      <li>• Recruit skilled players</li>
-                      <li>• Organize practice sessions</li>
-                      <li>• Participate in leagues</li>
-                      <li>• Track team performance</li>
-                    </ul>
-                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
+                  {teamFormSuccess && (
+                    <div className="bg-emerald-700 text-white rounded px-4 py-2 text-center mb-4">
+                      Team created successfully!
+                    </div>
+                  )}
+                  <form onSubmit={handleCreateTeam} className="space-y-4">
+                    <div>
+                      <label className="block text-slate-300 mb-1">
+                        Team Name
+                      </label>
+                      <Input
+                        name="name"
+                        value={teamForm.name}
+                        onChange={handleTeamFormChange}
+                        className="bg-slate-800 border-slate-700 text-white"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 mb-1">Sport</label>
+                      <select
+                        name="sport"
+                        value={teamForm.sport}
+                        onChange={handleTeamFormChange}
+                        className="w-full bg-slate-800 border-slate-700 text-white rounded px-3 py-2"
+                        required
+                      >
+                        <option value="">Select Sport</option>
+                        <option value="Football">Football</option>
+                        <option value="Cricket">Cricket</option>
+                        <option value="Tennis">Tennis</option>
+                        <option value="Badminton">Badminton</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 mb-1">Level</label>
+                      <select
+                        name="level"
+                        value={teamForm.level}
+                        onChange={handleTeamFormChange}
+                        className="w-full bg-slate-800 border-slate-700 text-white rounded px-3 py-2"
+                        required
+                      >
+                        <option value="">Select Level</option>
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 mb-1">
+                        Location
+                      </label>
+                      <Input
+                        name="location"
+                        value={teamForm.location}
+                        onChange={handleTeamFormChange}
+                        className="bg-slate-800 border-slate-700 text-white"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 mb-1">
+                        Max Members
+                      </label>
+                      <Input
+                        name="maxMembers"
+                        type="number"
+                        min={2}
+                        value={teamForm.maxMembers}
+                        onChange={handleTeamFormChange}
+                        className="bg-slate-800 border-slate-700 text-white"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 mb-1">
+                        Description
+                      </label>
+                      <textarea
+                        name="description"
+                        value={teamForm.description}
+                        onChange={handleTeamFormChange}
+                        className="w-full bg-slate-800 border-slate-700 text-white rounded px-3 py-2"
+                        rows={2}
+                        required
+                      />
+                    </div>
+                    <Button
+                      className="w-full bg-emerald-600 hover:bg-emerald-700"
+                      type="submit"
+                    >
                       <Plus className="w-4 h-4 mr-2" />
                       Create Team
                     </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-900 border-slate-800">
-                <CardHeader>
-                  <CardTitle className="flex items-center text-white">
-                    <Trophy className="w-5 h-5 mr-2" />
-                    Host Tournament
-                  </CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Organize your own sports tournament
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <p className="text-sm text-slate-400">
-                      Create exciting tournaments, set prize pools, and bring
-                      the community together.
-                    </p>
-                    <ul className="text-sm text-slate-400 space-y-1">
-                      <li>• Set tournament format</li>
-                      <li>• Manage registrations</li>
-                      <li>• Track match results</li>
-                      <li>• Award prizes</li>
-                    </ul>
-                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Host Tournament
-                    </Button>
-                  </div>
+                  </form>
                 </CardContent>
               </Card>
             </div>
-
             {/* Community Stats */}
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader>
@@ -706,6 +926,126 @@ export default function CommunityPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Player Connect Modal */}
+        {selectedPlayer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="bg-slate-900 rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+              <Button
+                className="absolute top-3 right-3 text-slate-400 hover:text-white text-2xl"
+                onClick={() => setSelectedPlayer(null)}
+                aria-label="Close"
+              >
+                ×
+              </Button>
+              <div className="flex items-center space-x-4 mb-4">
+                <Avatar className="w-14 h-14">
+                  <AvatarImage
+                    src={selectedPlayer.avatar || "/placeholder.svg"}
+                    alt={selectedPlayer.name}
+                  />
+                  <AvatarFallback className="bg-emerald-600 text-white">
+                    {selectedPlayer.name
+                      .split(" ")
+                      .map((n: string) => n[0])
+                      .join("")}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className="text-xl font-bold text-white">
+                    {selectedPlayer.name}
+                  </div>
+                  <div className="text-slate-400">
+                    {selectedPlayer.sport} • {selectedPlayer.skill}
+                  </div>
+                  <div className="text-slate-400">
+                    {selectedPlayer.location}
+                  </div>
+                </div>
+              </div>
+              <div className="mb-2 text-slate-300">{selectedPlayer.bio}</div>
+              <div className="mb-4 text-slate-400 text-sm">
+                Availability: {selectedPlayer.availability} <br />
+                Games Played: {selectedPlayer.gamesPlayed} <br />
+                Rating: {selectedPlayer.rating}
+              </div>
+              <div className="mb-2 font-semibold text-white">
+                Send a message to connect:
+              </div>
+              <textarea
+                className="w-full bg-slate-800 border-slate-700 text-white rounded px-3 py-2 mb-2"
+                rows={2}
+                placeholder="Write your message..."
+                value={connectMessage}
+                onChange={(e) => setConnectMessage(e.target.value)}
+              />
+              <Button
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                onClick={handleSendConnect}
+                disabled={!connectMessage.trim() || connectSuccess}
+              >
+                {connectSuccess ? "Message Sent!" : "Send Message"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Team Connect Modal */}
+        {selectedTeam && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="bg-slate-900 rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+              <button
+                className="absolute top-3 right-3 text-slate-400 hover:text-white text-2xl"
+                onClick={() => setSelectedTeam(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+              <div className="flex items-center space-x-4 mb-4">
+                <Image
+                  src={selectedTeam.image || "/placeholder.svg"}
+                  alt={selectedTeam.name}
+                  width={60}
+                  height={60}
+                  className="rounded-lg"
+                />
+                <div>
+                  <div className="text-xl font-bold text-white">
+                    {selectedTeam.name}
+                  </div>
+                  <div className="text-slate-400">
+                    {selectedTeam.sport} • {selectedTeam.level}
+                  </div>
+                  <div className="text-slate-400">{selectedTeam.location}</div>
+                </div>
+              </div>
+              <div className="mb-2 text-slate-300">
+                {selectedTeam.description}
+              </div>
+              <div className="mb-4 text-slate-400 text-sm">
+                Members: {selectedTeam.members}/{selectedTeam.maxMembers} <br />
+                Next Match: {selectedTeam.nextMatch}
+              </div>
+              <div className="mb-2 font-semibold text-white">
+                Send a message to join:
+              </div>
+              <textarea
+                className="w-full bg-slate-800 border-slate-700 text-white rounded px-3 py-2 mb-2"
+                rows={2}
+                placeholder="Write your message..."
+                value={connectMessage}
+                onChange={(e) => setConnectMessage(e.target.value)}
+              />
+              <Button
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                onClick={handleSendConnect}
+                disabled={!connectMessage.trim() || connectSuccess}
+              >
+                {connectSuccess ? "Request Sent!" : "Send Request"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
