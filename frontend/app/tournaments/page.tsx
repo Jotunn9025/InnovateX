@@ -33,6 +33,7 @@ import {
   Medal,
 } from "lucide-react";
 import Image from "next/image";
+import TSEC from "@/public/TSEC.png";
 import Link from "next/link";
 import { useUser } from "@/contexts/UserContext";
 import { useRouter } from "next/navigation";
@@ -235,7 +236,27 @@ export default function TournamentsPage() {
     },
   ];
 
-  const filteredTournaments = tournaments.filter((tournament) => {
+  // Add state for tournaments (so we can add new ones)
+  const [tournamentsState, setTournamentsState] =
+    useState<Tournament[]>(tournaments);
+  // Add state for form fields
+  const [form, setForm] = useState({
+    name: "",
+    sport: "",
+    location: "",
+    startDate: "",
+    endDate: "",
+    prize: "",
+    registrationFee: "",
+    maxTeams: "",
+    description: "",
+    format: "",
+    difficulty: "",
+  });
+  const [formSuccess, setFormSuccess] = useState(false);
+
+  // Use tournamentsState instead of tournaments for filtering
+  const filteredTournaments = tournamentsState.filter((tournament) => {
     const matchesSearch =
       tournament.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tournament.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -285,6 +306,82 @@ export default function TournamentsPage() {
     }
   };
 
+  // Helper for form reset
+  const resetForm = () => {
+    setForm({
+      name: "",
+      sport: "",
+      location: "",
+      startDate: "",
+      endDate: "",
+      prize: "",
+      registrationFee: "",
+      maxTeams: "",
+      description: "",
+      format: "",
+      difficulty: "",
+    });
+  };
+
+  // Handle form input change
+  const handleFormChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // Handle form submit
+  const handleCreateTournament = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Basic validation
+    if (
+      !form.name ||
+      !form.sport ||
+      !form.location ||
+      !form.startDate ||
+      !form.endDate ||
+      !form.prize ||
+      !form.registrationFee ||
+      !form.maxTeams ||
+      !form.description ||
+      !form.format ||
+      !form.difficulty
+    ) {
+      setFormSuccess(false);
+      return;
+    }
+    // Parse prize amount (remove non-digits)
+    const prizeAmount = parseInt(form.prize.replace(/[^\d]/g, "")) || 0;
+    // Create new tournament object
+    const newTournament: Tournament = {
+      id: Date.now(),
+      name: form.name,
+      sport: form.sport,
+      date: `${form.startDate} - ${form.endDate}`,
+      startDate: form.startDate,
+      location: form.location,
+      prize: form.prize,
+      prizeAmount,
+      teams: 0,
+      maxTeams: parseInt(form.maxTeams),
+      registrationFee: form.registrationFee,
+      status: "Open",
+      image:
+        "/placeholder.svg?height=200&width=300&text=" +
+        encodeURIComponent(form.name),
+      organizer: user ? user.firstName : "You",
+      description: form.description,
+      format: form.format,
+      difficulty: form.difficulty,
+      registrationDeadline: form.startDate,
+    };
+    setTournamentsState([newTournament, ...tournamentsState]);
+    setFormSuccess(true);
+    resetForm();
+  };
+
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Header */}
@@ -292,10 +389,17 @@ export default function TournamentsPage() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">TB</span>
+              <div className="flex items-center space-x-2">
+                <div className="w-10 h-10 relative overflow-hidden p-1">
+                  <Image
+                    src={TSEC}
+                    alt="TurfBook Logo"
+                    fill
+                    className="object-cover rounded-md hover:scale-105 transition-transform duration-300 hover:drop-shadow-lg"
+                  />
+                </div>
+                <span className="text-xl font-bold text-white">TSEC</span>
               </div>
-              <span className="text-xl font-bold text-white">TurfBook</span>
             </Link>
             <nav className="hidden md:flex items-center space-x-6">
               <Link
@@ -725,66 +829,171 @@ export default function TournamentsPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-white">
-                        What you get:
-                      </h3>
-                      <ul className="space-y-2 text-sm text-gray-300">
-                        <li className="flex items-center">
-                          <Star className="w-4 h-4 text-green-400 mr-2" />
-                          Tournament management tools
-                        </li>
-                        <li className="flex items-center">
-                          <Star className="w-4 h-4 text-green-400 mr-2" />
-                          Automated registration system
-                        </li>
-                        <li className="flex items-center">
-                          <Star className="w-4 h-4 text-green-400 mr-2" />
-                          Live scoring and brackets
-                        </li>
-                        <li className="flex items-center">
-                          <Star className="w-4 h-4 text-green-400 mr-2" />
-                          Prize distribution tracking
-                        </li>
-                        <li className="flex items-center">
-                          <Star className="w-4 h-4 text-green-400 mr-2" />
-                          Marketing and promotion
-                        </li>
-                      </ul>
+                  {/* Success message */}
+                  {formSuccess && (
+                    <div className="bg-green-700 text-white rounded px-4 py-2 text-center mb-4">
+                      Tournament created successfully!
                     </div>
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-white">
-                        Requirements:
-                      </h3>
-                      <ul className="space-y-2 text-sm text-gray-300">
-                        <li className="flex items-center">
-                          <Clock className="w-4 h-4 text-blue-400 mr-2" />
-                          Minimum 8 teams
-                        </li>
-                        <li className="flex items-center">
-                          <Clock className="w-4 h-4 text-blue-400 mr-2" />
-                          Venue confirmation
-                        </li>
-                        <li className="flex items-center">
-                          <Clock className="w-4 h-4 text-blue-400 mr-2" />
-                          Prize pool setup
-                        </li>
-                        <li className="flex items-center">
-                          <Clock className="w-4 h-4 text-blue-400 mr-2" />
-                          Tournament rules
-                        </li>
-                        <li className="flex items-center">
-                          <Clock className="w-4 h-4 text-blue-400 mr-2" />
-                          Registration timeline
-                        </li>
-                      </ul>
+                  )}
+                  {/* Host Tournament Form */}
+                  <form onSubmit={handleCreateTournament} className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Tournament Name
+                        </label>
+                        <Input
+                          name="name"
+                          value={form.name}
+                          onChange={handleFormChange}
+                          className="bg-gray-700 border-gray-600 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Sport
+                        </label>
+                        <select
+                          name="sport"
+                          value={form.sport}
+                          onChange={handleFormChange}
+                          className="w-full bg-gray-700 border-gray-600 text-white rounded px-3 py-2"
+                          required
+                        >
+                          <option value="">Select Sport</option>
+                          <option value="Football">Football</option>
+                          <option value="Cricket">Cricket</option>
+                          <option value="Tennis">Tennis</option>
+                          <option value="Badminton">Badminton</option>
+                          <option value="Basketball">Basketball</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Location
+                        </label>
+                        <Input
+                          name="location"
+                          value={form.location}
+                          onChange={handleFormChange}
+                          className="bg-gray-700 border-gray-600 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Start Date
+                        </label>
+                        <Input
+                          name="startDate"
+                          type="date"
+                          value={form.startDate}
+                          onChange={handleFormChange}
+                          className="bg-gray-700 border-gray-600 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          End Date
+                        </label>
+                        <Input
+                          name="endDate"
+                          type="date"
+                          value={form.endDate}
+                          onChange={handleFormChange}
+                          className="bg-gray-700 border-gray-600 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Prize (e.g. ₹50,000)
+                        </label>
+                        <Input
+                          name="prize"
+                          value={form.prize}
+                          onChange={handleFormChange}
+                          className="bg-gray-700 border-gray-600 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Registration Fee
+                        </label>
+                        <Input
+                          name="registrationFee"
+                          value={form.registrationFee}
+                          onChange={handleFormChange}
+                          className="bg-gray-700 border-gray-600 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Max Teams
+                        </label>
+                        <Input
+                          name="maxTeams"
+                          type="number"
+                          min={2}
+                          value={form.maxTeams}
+                          onChange={handleFormChange}
+                          className="bg-gray-700 border-gray-600 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Format
+                        </label>
+                        <Input
+                          name="format"
+                          value={form.format}
+                          onChange={handleFormChange}
+                          className="bg-gray-700 border-gray-600 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-300 mb-1">
+                          Difficulty
+                        </label>
+                        <select
+                          name="difficulty"
+                          value={form.difficulty}
+                          onChange={handleFormChange}
+                          className="w-full bg-gray-700 border-gray-600 text-white rounded px-3 py-2"
+                          required
+                        >
+                          <option value="">Select Difficulty</option>
+                          <option value="Amateur">Amateur</option>
+                          <option value="Intermediate">Intermediate</option>
+                          <option value="Advanced">Advanced</option>
+                          <option value="Professional">Professional</option>
+                        </select>
+                      </div>
                     </div>
-                  </div>
-                  <Button className="w-full" size="lg">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Create Tournament
-                  </Button>
+                    <div>
+                      <label className="block text-gray-300 mb-1">
+                        Description
+                      </label>
+                      <textarea
+                        name="description"
+                        value={form.description}
+                        onChange={handleFormChange}
+                        className="w-full bg-gray-700 border-gray-600 text-white rounded px-3 py-2"
+                        rows={3}
+                        required
+                      />
+                    </div>
+                    <Button className="w-full" size="lg" type="submit">
+                      <Plus className="w-5 h-5 mr-2" />
+                      Create Tournament
+                    </Button>
+                  </form>
                 </CardContent>
               </Card>
             </div>

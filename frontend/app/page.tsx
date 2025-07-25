@@ -63,16 +63,16 @@ export default function HomePage() {
   const upcomingTournaments = [
     {
       id: 1,
-      name: "Mumbai Football League",
+      name: "Mumbai Football Championship",
       date: "Aug 15-17, 2025",
-      prize: "₹50,000",
+      prize: "₹100,000",
       participants: 16,
     },
     {
       id: 2,
-      name: "mumbai Premier League",
+      name: "Tennis Master Cup",
       date: "Aug 20-22, 2025",
-      prize: "₹75,000",
+      prize: "₹50,000",
       participants: 12,
     },
   ];
