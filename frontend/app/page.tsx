@@ -19,6 +19,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import TSEC from "@/public/TSEC.png";
+import Foto from "@/public/1.png";
 import Link from "next/link";
 import { useUser } from "@/contexts/UserContext";
 import { useRouter } from "next/navigation";
@@ -33,7 +34,7 @@ export default function HomePage() {
       location: "Downtown, Mumbai",
       rating: 4.8,
       price: 1200,
-      image: "/images/1.png",
+      image: Foto,
       sports: ["Football", "Cricket"],
       availability: "Available",
     },
@@ -43,7 +44,7 @@ export default function HomePage() {
       location: "Bandra, Mumbai",
       rating: 4.6,
       price: 1000,
-      image: "/placeholder.svg?height=200&width=300",
+      image: Foto,
       sports: ["Cricket", "Tennis"],
       availability: "Available",
     },
@@ -53,7 +54,7 @@ export default function HomePage() {
       location: "Andheri, Mumbai",
       rating: 4.9,
       price: 800,
-      image: "/placeholder.svg?height=200&width=300",
+      image: Foto,
       sports: ["Tennis", "Badminton"],
       availability: "Filling Fast",
     },
@@ -144,17 +145,17 @@ export default function HomePage() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 relative rounded-lg overflow-hidden backdrop-blur-sm bg-white/10 p-1">
+              <div className="w-10 h-10 relative overflow-hidden p-1">
                 <Image
                   src={TSEC}
                   alt="TurfBook Logo"
                   fill
-                  className="object-cover rounded-md"
+                  className="object-cover rounded-md hover:scale-105 transition-transform duration-300 hover:drop-shadow-lg"
                 />
               </div>
               <span className="text-xl font-bold text-white">TSEC</span>
             </div>
-            <nav className="hidden md:flex items-center space-x-6">
+            <nav className="hidden md:flex items-center space-x-6 text-lg">
               <Link
                 href="/turfs"
                 className="text-white/70 hover:text-emerald-400 transition-all duration-300 hover:drop-shadow-lg"
@@ -174,7 +175,7 @@ export default function HomePage() {
                 Community
               </Link>
             </nav>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 ">
               {user ? (
                 <>
                   <Button
@@ -340,7 +341,7 @@ export default function HomePage() {
                 <div className="relative overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent z-10"></div>
                   <Image
-                    src={turf.image || "/placeholder.svg"}
+                    src={turf.image}
                     alt={turf.name}
                     width={300}
                     height={200}
@@ -389,7 +390,7 @@ export default function HomePage() {
                       asChild
                       className="bg-emerald-600/80 hover:bg-emerald-700/90 backdrop-blur-sm border border-emerald-500/30 shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 hover:scale-105"
                     >
-                      <Link href={`/turfs/${turf.id}`}>Book Now</Link>
+                      <Link href={`/turfs`}>Book Now</Link>
                     </Button>
                   </div>
                 </CardContent>
@@ -597,8 +598,8 @@ export default function HomePage() {
           </button>
         )}
         {chatOpen && (
-          <div className="w-80 bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
-            <div className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between">
+          <div className="w-80 bg-slate-800 rounded-xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
+            <div className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
               <span className="font-semibold">Chat</span>
               <button
                 onClick={() => setChatOpen(false)}
@@ -638,7 +639,7 @@ export default function HomePage() {
             >
               <input
                 type="text"
-                className="flex-1 px-3 py-2 text-sm focus:outline-none"
+                className="flex-1 px-3 py-2 text-sm focus:outline-none text-white"
                 placeholder="Type your message..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}

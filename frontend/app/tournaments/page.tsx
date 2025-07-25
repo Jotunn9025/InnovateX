@@ -34,9 +34,40 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import axios from "axios";
 import { useUser } from "@/contexts/UserContext";
 import { useRouter } from "next/navigation";
+
+interface Tournament {
+  id: number;
+  name: string;
+  sport: string;
+  date: string;
+  startDate: string;
+  location: string;
+  prize: string;
+  prizeAmount: number;
+  teams: number;
+  maxTeams: number;
+  registrationFee: string;
+  status: string;
+  image: string;
+  organizer: string;
+  description: string;
+  format: string;
+  difficulty: string;
+  registrationDeadline: string;
+}
+
+interface PastTournament {
+  id: number;
+  name: string;
+  sport: string;
+  date: string;
+  winner: string;
+  prize: string;
+  teams: number;
+  image: string;
+}
 
 export default function TournamentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,7 +83,7 @@ export default function TournamentsPage() {
     router.push("/");
   };
 
-  const tournaments = [
+  const tournaments: Tournament[] = [
     {
       id: 1,
       name: "Mumbai Football Championship",
@@ -181,7 +212,7 @@ export default function TournamentsPage() {
     },
   ];
 
-  const pastTournaments = [
+  const pastTournaments: PastTournament[] = [
     {
       id: 101,
       name: "Mumbai Cricket Premier League",
@@ -251,34 +282,6 @@ export default function TournamentsPage() {
         return "bg-red-600 text-white";
       default:
         return "bg-gray-600 text-white";
-    }
-  };
-
-  // Example: Create tournament
-  const handleCreateTournament = async (tournamentData: any) => {
-    try {
-      const userId = localStorage.getItem("userId") || "mockUserId";
-      const res = await axios.post("http://localhost:5000/api/tournaments", {
-        ...tournamentData,
-        organizer: userId,
-      });
-      alert("Tournament created!");
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Create failed");
-    }
-  };
-
-  // Example: Join tournament
-  const handleJoinTournament = async (tournamentId: string) => {
-    try {
-      const userId = localStorage.getItem("userId") || "mockUserId";
-      const res = await axios.post(
-        `http://localhost:5000/api/tournaments/${tournamentId}/join`,
-        { userId }
-      );
-      alert("Joined tournament!");
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Join failed");
     }
   };
 
